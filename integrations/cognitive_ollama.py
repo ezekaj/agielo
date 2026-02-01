@@ -192,13 +192,15 @@ class CognitiveOllama:
                 data=json.dumps(payload).encode('utf-8'),
                 headers={'Content-Type': 'application/json'}
             )
-            with urllib.request.urlopen(req, timeout=120) as response:
+            with urllib.request.urlopen(req, timeout=300) as response:
                 result = json.loads(response.read().decode('utf-8'))
                 return result["message"]["content"]
-        except urllib.error.URLError:
-            return "[Ollama not running. Start with: ollama serve]"
+        except urllib.error.URLError as e:
+            return f"[Ollama not running or model '{self.model}' not found. Start with: ollama serve]"
+        except urllib.error.HTTPError as e:
+            return f"[Ollama error: {e.code} - Model '{self.model}' may not exist. Try: ollama pull ministral-3:8b]"
         except Exception as e:
-            return f"[Error: {e}]"
+            return f"[Error calling Ollama with model '{self.model}': {e}]"
 
     def consolidate(self) -> Dict[str, Any]:
         """

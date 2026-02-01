@@ -47,7 +47,8 @@ class BasicEmotion(Enum):
     CONTEMPT = auto()    # anger + disgust
 
 
-# Emotion parameters: (valence, arousal, approach/avoid)
+# Emotion parameters: (valence, arousal, dominance/approach)
+# Extended to 3D VAD (Valence-Arousal-Dominance) space for richer blending
 EMOTION_COORDS = {
     BasicEmotion.JOY: (0.8, 0.6, 1.0),
     BasicEmotion.SADNESS: (-0.7, -0.3, -0.5),
@@ -64,6 +65,101 @@ EMOTION_COORDS = {
     BasicEmotion.CURIOSITY: (0.5, 0.6, 0.7),
     BasicEmotion.CONTEMPT: (-0.4, 0.1, 0.3),
 }
+
+
+class EmotionBlender:
+    """
+    Vector-based emotion blending for mixed emotional states.
+
+    Allows simultaneous emotions (e.g., "curiosity + anxiety" when
+    exploring unknown topics) through vector interpolation in VAD space.
+    """
+
+    def __init__(self):
+        # Convert emotions to numpy vectors for efficient blending
+        self.emotion_vectors = {
+            emotion: np.array(coords)
+            for emotion, coords in EMOTION_COORDS.items()
+        }
+
+    def blend_emotions(self, emotion_weights: Dict[BasicEmotion, float]) -> np.ndarray:
+        """
+        Blend multiple emotions with their intensities.
+
+        Args:
+            emotion_weights: Dict mapping emotions to their intensities (0-1)
+
+        Returns:
+            Blended VAD vector (valence, arousal, dominance)
+        """
+        if not emotion_weights:
+            return np.zeros(3)
+
+        # Weighted sum of emotion vectors
+        blended = np.zeros(3)
+        total_weight = 0.0
+
+        for emotion, weight in emotion_weights.items():
+            if weight > 0 and emotion in self.emotion_vectors:
+                blended += self.emotion_vectors[emotion] * weight
+                total_weight += weight
+
+        if total_weight > 0:
+            blended /= total_weight
+
+        # Clamp to valid range
+        return np.clip(blended, -1, 1)
+
+    def identify_blended_emotion(self, vad_vector: np.ndarray) -> Tuple[BasicEmotion, float]:
+        """
+        Identify the closest discrete emotion to a blended VAD vector.
+
+        Returns:
+            (closest_emotion, similarity_score)
+        """
+        best_emotion = BasicEmotion.SURPRISE  # Default
+        best_similarity = -1.0
+
+        for emotion, vec in self.emotion_vectors.items():
+            # Cosine similarity
+            similarity = np.dot(vad_vector, vec) / (
+                np.linalg.norm(vad_vector) * np.linalg.norm(vec) + 1e-8
+            )
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_emotion = emotion
+
+        return best_emotion, float(best_similarity)
+
+    def get_mixed_state_description(self, emotion_weights: Dict[BasicEmotion, float]) -> str:
+        """Get a description of the mixed emotional state."""
+        # Get top 2 emotions
+        sorted_emotions = sorted(emotion_weights.items(), key=lambda x: x[1], reverse=True)[:2]
+
+        if len(sorted_emotions) == 0:
+            return "neutral"
+        elif len(sorted_emotions) == 1 or sorted_emotions[1][1] < 0.2:
+            return sorted_emotions[0][0].name.lower()
+        else:
+            e1, e2 = sorted_emotions[0][0].name.lower(), sorted_emotions[1][0].name.lower()
+            return f"{e1} with {e2}"
+
+    def interpolate(self, emotion1: BasicEmotion, emotion2: BasicEmotion,
+                   ratio: float = 0.5) -> np.ndarray:
+        """
+        Interpolate between two emotions.
+
+        Args:
+            emotion1: First emotion
+            emotion2: Second emotion
+            ratio: 0 = all emotion1, 1 = all emotion2
+
+        Returns:
+            Interpolated VAD vector
+        """
+        v1 = self.emotion_vectors.get(emotion1, np.zeros(3))
+        v2 = self.emotion_vectors.get(emotion2, np.zeros(3))
+        return (1 - ratio) * v1 + ratio * v2
 
 
 @dataclass
@@ -341,6 +437,8 @@ class EmotionSystem:
 
     The emotional brain: appraises situations, generates feelings,
     creates somatic markers, guides decisions.
+
+    NEW: Vector-based emotion blending for mixed states.
     """
 
     def __init__(self, dim: int = 64):
@@ -351,6 +449,12 @@ class EmotionSystem:
 
         # Current discrete emotions
         self.current_emotions: Dict[BasicEmotion, float] = {e: 0.0 for e in BasicEmotion}
+
+        # Blended emotion state (VAD vector)
+        self.blended_state: np.ndarray = np.zeros(3)
+
+        # Emotion blender for mixed states
+        self.blender = EmotionBlender()
 
         # Mood (slow-changing)
         self.mood = CoreAffect()
@@ -608,6 +712,77 @@ class EmotionSystem:
             self.current_emotions, target_valence, strategy
         )
         self._update_core_affect()
+        self._update_blended_state()
+
+    def _update_blended_state(self):
+        """Update the blended emotion vector from current discrete emotions."""
+        self.blended_state = self.blender.blend_emotions(self.current_emotions)
+
+    def get_blended_emotion(self) -> Tuple[np.ndarray, str]:
+        """
+        Get the blended emotional state as a VAD vector and description.
+
+        Returns:
+            (vad_vector, description)
+        """
+        self._update_blended_state()
+        description = self.blender.get_mixed_state_description(self.current_emotions)
+        return self.blended_state.copy(), description
+
+    def add_emotion(self, emotion: BasicEmotion, intensity: float):
+        """
+        Add/blend an emotion into the current state.
+
+        Unlike setting, this BLENDS with existing emotions.
+        """
+        current = self.current_emotions.get(emotion, 0.0)
+        # Blend rather than replace
+        self.current_emotions[emotion] = min(1.0, current + intensity * 0.5)
+        self._update_blended_state()
+
+    def cognitive_reappraisal(self, situation_context: str = "") -> Dict[str, Any]:
+        """
+        Apply cognitive reappraisal to reduce negative emotions.
+
+        This is a coping mechanism that reframes the situation positively.
+        """
+        # Get current negative emotions
+        negative_emotions = {
+            e: v for e, v in self.current_emotions.items()
+            if v > 0.1 and EMOTION_COORDS.get(e, (0,0,0))[0] < 0
+        }
+
+        if not negative_emotions:
+            return {'reappraisal': 'not_needed', 'negative_emotions': 0}
+
+        # Apply reappraisal - reduce negative, boost positive
+        reappraisal_strength = self.regulation.regulation_capacity * 0.7
+
+        reductions = {}
+        for emotion, intensity in negative_emotions.items():
+            reduction = intensity * reappraisal_strength * 0.4
+            self.current_emotions[emotion] = max(0, intensity - reduction)
+            reductions[emotion.name] = reduction
+
+        # Slight boost to positive emotions
+        positive_emotions = [BasicEmotion.JOY, BasicEmotion.CURIOSITY, BasicEmotion.ANTICIPATION]
+        for pe in positive_emotions:
+            current = self.current_emotions.get(pe, 0.0)
+            self.current_emotions[pe] = min(1.0, current + 0.1)
+
+        # Update states
+        self._update_core_affect()
+        self._update_blended_state()
+
+        # Deplete regulation capacity
+        self.regulation.regulation_capacity = max(0, self.regulation.regulation_capacity - 0.15)
+
+        return {
+            'reappraisal': 'applied',
+            'reductions': reductions,
+            'new_valence': self.core_affect.valence,
+            'regulation_remaining': self.regulation.regulation_capacity
+        }
 
     def learn_association(self, stimulus_embedding: np.ndarray, valence: float):
         """

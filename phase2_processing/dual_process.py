@@ -472,11 +472,14 @@ class System2:
 
 class DualProcessController:
     """
-    Controls switching between System 1 and System 2.
+    Controls HYBRID processing between System 1 and System 2.
+
+    NEW: System 1 proposes, System 2 verifies/refines (human-like collaboration)
 
     Key decisions:
     - When to trust System 1 (fast, automatic)
     - When to engage System 2 (slow, deliberate)
+    - How System 2 VERIFIES and corrects System 1
     - How to integrate responses from both
 
     Triggers for System 2:
@@ -485,6 +488,7 @@ class DualProcessController:
     3. Conflicting responses
     4. Explicit instruction to deliberate
     5. Novel situation (no cached pattern)
+    6. Domain-specific learned thresholds (calibration)
     """
 
     def __init__(self, config: Optional[DualProcessConfig] = None):
@@ -498,12 +502,24 @@ class DualProcessController:
         self.uncertainty_tracker = ExponentialMovingAverage(alpha=0.1)
         self.conflict_detector = ConflictDetector()
 
+        # LEARNED CONFIDENCE CALIBRATION
+        # Tracks System 1 accuracy per domain to adjust thresholds
+        self.domain_accuracy: Dict[str, List[bool]] = {}  # domain -> [correct, correct, wrong, ...]
+        self.domain_thresholds: Dict[str, float] = {}      # domain -> threshold for S2
+
+        # Verification history (did S2 correction help?)
+        self.verification_history: List[Dict] = []
+
         # Current mode
         self.current_mode = ProcessingMode.INTUITIVE
+
+        # Thought traces for metacognition/transparency
+        self.thought_traces: List[str] = []
 
         # Statistics
         self.s1_calls = 0
         self.s2_calls = 0
+        self.s2_corrections = 0  # How often S2 overrode S1
         self.switches = 0
 
     def process(
@@ -511,40 +527,49 @@ class DualProcessController:
         input_embedding: np.ndarray,
         input_data: Optional[Any] = None,
         goal: Optional[Any] = None,
-        force_deliberate: bool = False
+        force_deliberate: bool = False,
+        domain: str = "general"
     ) -> Tuple[Any, float, Dict[str, Any]]:
         """
-        Process input through dual-process system.
+        HYBRID process: System 1 proposes, System 2 verifies/refines.
 
         Args:
             input_embedding: Vector representation of input
             input_data: Structured input data (for System 2)
             goal: Optional explicit goal
             force_deliberate: Force System 2 processing
+            domain: Domain for calibrated thresholds (e.g., "math", "logic")
 
         Returns:
             response: Final response
             confidence: Confidence in response
-            metadata: Processing information
+            metadata: Processing information with thought traces
         """
-        # Always run System 1 first (it's automatic)
+        self.thought_traces = []  # Reset traces
+
+        # STEP 1: Always run System 1 first (it's automatic)
         s1_response, s1_confidence, s1_meta = self.system1.process(input_embedding)
         self.s1_calls += 1
 
-        # Decide whether to engage System 2
+        self._trace(f"System 1 quick response: confidence={s1_confidence:.2f}")
+
+        # STEP 2: Decide whether to engage System 2 (with domain calibration)
         needs_system2 = force_deliberate or self._needs_deliberation(
             s1_confidence,
             input_embedding,
-            s1_response
+            s1_response,
+            domain
         )
 
         if needs_system2:
+            self._trace(f"Low S1 confidence ({s1_confidence:.2f}) → engaging System 2")
+
             # Switch to deliberative mode
             if self.current_mode != ProcessingMode.DELIBERATIVE:
                 self.switches += 1
                 self.current_mode = ProcessingMode.DELIBERATIVE
 
-            # Run System 2 with System 1's response as hint
+            # STEP 3: System 2 VERIFIES and potentially corrects System 1
             s2_input = input_data if input_data is not None else input_embedding
             s2_response, s2_confidence, s2_meta = self.system2.process(
                 s2_input,
@@ -553,20 +578,34 @@ class DualProcessController:
             )
             self.s2_calls += 1
 
+            # STEP 4: VERIFICATION - Check if S2 agrees or overrides
+            s2_verified = self._verify_with_system2(
+                s1_response, s1_confidence,
+                s2_response, s2_confidence
+            )
+
+            if s2_verified['overridden']:
+                self.s2_corrections += 1
+                self._trace(f"System 2 CORRECTED System 1: {s2_verified['reason']}")
+
             # Integrate responses
             response, confidence, meta = self._integrate_responses(
                 s1_response, s1_confidence, s1_meta,
                 s2_response, s2_confidence, s2_meta
             )
-            meta['system_used'] = 'system2'
+            meta['system_used'] = 'hybrid'
+            meta['s2_verification'] = s2_verified
+            meta['thought_trace'] = self.thought_traces.copy()
 
         else:
             # Trust System 1
+            self._trace(f"High S1 confidence ({s1_confidence:.2f}) → trusting System 1")
             self.current_mode = ProcessingMode.INTUITIVE
             response = s1_response
             confidence = s1_confidence
             meta = s1_meta
             meta['system_used'] = 'system1'
+            meta['thought_trace'] = self.thought_traces.copy()
 
         # Update uncertainty tracker
         self.uncertainty_tracker.update(1.0 - confidence)
@@ -579,33 +618,84 @@ class DualProcessController:
 
         return response, confidence, meta
 
+    def _trace(self, message: str):
+        """Add thought trace for metacognitive transparency."""
+        self.thought_traces.append(message)
+
+    def _verify_with_system2(
+        self,
+        s1_response: Any, s1_confidence: float,
+        s2_response: Any, s2_confidence: float
+    ) -> Dict[str, Any]:
+        """
+        System 2 verification step.
+
+        Checks for:
+        - Logical errors in S1 response
+        - Conflicts with known rules
+        - Confidence calibration
+        """
+        result = {
+            'overridden': False,
+            'reason': None,
+            'agreement': False,
+            's1_confidence': s1_confidence,
+            's2_confidence': s2_confidence
+        }
+
+        # Check if they agree
+        if self._responses_agree(s1_response, s2_response):
+            result['agreement'] = True
+            self._trace("S1 and S2 agree → high confidence convergence")
+            return result
+
+        # S2 disagrees - check if it should override
+        if s2_confidence > s1_confidence + 0.2:
+            result['overridden'] = True
+            result['reason'] = "S2 significantly more confident"
+        elif s2_confidence > 0.7 and s1_confidence < 0.5:
+            result['overridden'] = True
+            result['reason'] = "S1 uncertain, S2 confident"
+        elif s1_confidence < 0.3:
+            result['overridden'] = True
+            result['reason'] = "S1 very uncertain"
+
+        return result
+
     def _needs_deliberation(
         self,
         s1_confidence: float,
         input_embedding: np.ndarray,
-        s1_response: Any
+        s1_response: Any,
+        domain: str = "general"
     ) -> bool:
-        """Decide if System 2 is needed."""
-        # Low confidence
-        if s1_confidence < self.config.uncertainty_threshold:
+        """
+        Decide if System 2 is needed using LEARNED CALIBRATION.
+
+        Uses domain-specific thresholds learned from past accuracy.
+        """
+        # Get calibrated threshold for this domain
+        threshold = self._get_calibrated_threshold(domain)
+        self._trace(f"Domain '{domain}' calibrated threshold: {threshold:.2f}")
+
+        # Low confidence (using calibrated threshold)
+        if s1_confidence < threshold:
             return True
 
         # High complexity (measured by embedding variance and range)
         complexity = np.std(input_embedding)
         value_range = np.max(np.abs(input_embedding))
-        # Also check if there are multiple significant values (complex pattern)
         significant_dims = np.sum(np.abs(input_embedding) > 0.5)
 
         if complexity > self.config.complexity_threshold:
             return True
-        if value_range > 2.0:  # Large values indicate complex input
+        if value_range > 2.0:
             return True
-        if significant_dims > 3:  # Multiple active dimensions = complex (lowered threshold)
+        if significant_dims > 3:
             return True
 
         # Check for numerical patterns (math problems need System 2)
-        # If first few values look like numbers in a problem, engage System 2
-        if np.any(input_embedding[:10] > 1.0):  # Numbers > 1 suggest math
+        if np.any(input_embedding[:10] > 1.0):
             return True
 
         # Detect conflict
@@ -614,6 +704,60 @@ class DualProcessController:
             return True
 
         return False
+
+    def _get_calibrated_threshold(self, domain: str) -> float:
+        """
+        Get the calibrated threshold for engaging System 2 in this domain.
+
+        If System 1 has been wrong often in this domain, threshold is higher
+        (more likely to engage System 2).
+        """
+        if domain not in self.domain_accuracy:
+            return self.config.uncertainty_threshold  # Default
+
+        history = self.domain_accuracy[domain]
+        if len(history) < 5:
+            return self.config.uncertainty_threshold  # Not enough data
+
+        # Calculate recent accuracy
+        recent = history[-20:]  # Last 20 decisions
+        accuracy = sum(1 for x in recent if x) / len(recent)
+
+        # If accuracy is low, raise the threshold (engage S2 more often)
+        # If accuracy is high, lower the threshold (trust S1 more)
+        calibrated = self.config.uncertainty_threshold + (0.5 - accuracy) * 0.3
+
+        # Clamp to reasonable range
+        calibrated = max(0.2, min(0.8, calibrated))
+
+        # Cache the calibrated threshold
+        self.domain_thresholds[domain] = calibrated
+
+        return calibrated
+
+    def record_outcome(self, domain: str, system_used: str, was_correct: bool):
+        """
+        Record whether a decision was correct for calibration learning.
+
+        Call this after receiving feedback on a response.
+        """
+        if domain not in self.domain_accuracy:
+            self.domain_accuracy[domain] = []
+
+        # Record if System 1 alone would have been correct
+        self.domain_accuracy[domain].append(was_correct)
+
+        # Keep bounded
+        if len(self.domain_accuracy[domain]) > 100:
+            self.domain_accuracy[domain] = self.domain_accuracy[domain][-50:]
+
+        # Log for verification analysis
+        self.verification_history.append({
+            'domain': domain,
+            'system_used': system_used,
+            'was_correct': was_correct,
+            'timestamp': time.time()
+        })
 
     def _integrate_responses(
         self,

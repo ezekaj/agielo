@@ -114,35 +114,73 @@ class HippocampalReplay:
             self.replay_buffer = self.replay_buffer[:500]
 
     def select_for_replay(self, num_memories: int = 50) -> List[MemoryTrace]:
-        """Select memories for replay prioritizing important ones."""
+        """
+        Select memories for replay using PROBABILISTIC sampling.
+
+        Probability proportional to:
+        - Emotional intensity (stronger emotions = more likely to replay)
+        - Strength (already strong memories get reinforced)
+        - Rehearsal count (frequently rehearsed = important)
+        - Recency (recent memories prioritized)
+
+        This mimics how the brain preferentially replays emotionally
+        significant and frequently accessed memories during REM sleep.
+        """
         if not self.replay_buffer:
             return []
 
-        # Score memories for replay priority
-        scored = []
+        # Calculate replay probability for each memory
+        candidates = []
+        probabilities = []
+
         for memory in self.replay_buffer:
             if memory.strength < self.min_strength_for_replay:
                 continue
 
-            # Priority factors:
-            # 1. Emotional salience
-            # 2. Recency
-            # 3. Inverse of replay count (novelty)
-            recency = 1.0 / (1.0 + (time.time() - memory.creation_time) / 3600)
-            novelty = 1.0 / (1.0 + memory.replay_count)
+            # Compute composite score for probability
+            # Emotional salience is key driver (REM consolidation)
+            emotional_weight = memory.emotional_salience * 2.0
 
-            priority = (
-                0.4 * memory.emotional_salience +
-                0.3 * recency +
-                0.3 * novelty
+            # Strength indicates importance
+            strength_weight = memory.strength
+
+            # Rehearsal count shows repeated access (important)
+            rehearsal_weight = np.log1p(memory.replay_count) * 0.5
+
+            # Recency bias (recent memories prioritized)
+            hours_old = (time.time() - memory.creation_time) / 3600
+            recency_weight = 1.0 / (1.0 + hours_old * 0.1)
+
+            # Combined probability score
+            prob_score = (
+                emotional_weight * 0.35 +
+                strength_weight * 0.25 +
+                rehearsal_weight * 0.20 +
+                recency_weight * 0.20
             )
-            scored.append((priority, memory))
 
-        # Sort by priority
-        scored.sort(key=lambda x: x[0], reverse=True)
+            candidates.append(memory)
+            probabilities.append(max(0.01, prob_score))  # Minimum probability
 
-        # Select top memories
-        selected = [m for _, m in scored[:num_memories]]
+        if not candidates:
+            return []
+
+        # Normalize probabilities
+        total_prob = sum(probabilities)
+        probabilities = [p / total_prob for p in probabilities]
+
+        # Sample without replacement based on probabilities
+        num_to_select = min(num_memories, len(candidates))
+
+        # Use numpy for weighted sampling
+        indices = np.random.choice(
+            len(candidates),
+            size=num_to_select,
+            replace=False,
+            p=probabilities
+        )
+
+        selected = [candidates[i] for i in indices]
         return selected
 
     def replay(self, memories: List[MemoryTrace]) -> Dict[str, Any]:
@@ -234,9 +272,10 @@ class SynapticHomeostasis:
 
 class MemoryConsolidator:
     """
-    Active system consolidation.
+    Active system consolidation with knowledge graph building.
 
     Transfer memories from hippocampus (episodic) to cortex (semantic).
+    Builds semantic relations from repeated patterns.
     """
 
     def __init__(self, dim: int = 64):
@@ -247,6 +286,12 @@ class MemoryConsolidator:
 
         # Semantic store (cortex-like)
         self.semantic_store: Dict[str, np.ndarray] = {}
+
+        # Knowledge graph: subject -> relation -> objects (with strengths)
+        self.knowledge_graph: Dict[str, Dict[str, Dict[str, float]]] = {}
+
+        # Pattern co-occurrence tracker
+        self.cooccurrence: Dict[str, Dict[str, int]] = {}
 
         # Consolidation threshold
         self.consolidation_threshold = 3  # Minimum replays before consolidation
@@ -295,18 +340,9 @@ class MemoryConsolidator:
 
     def _extract_semantic(self, memory: MemoryTrace) -> np.ndarray:
         """Extract semantic content from episodic memory."""
-        # Abstraction: remove episodic-specific features
-        # (In reality, this is a complex process)
-
-        # Simple: average out some dimensions
         semantic = memory.content.copy()
-
-        # Add noise to specific details (forgetting specifics)
         semantic += np.random.randn(self.dim) * 0.1
-
-        # Normalize
         semantic /= (np.linalg.norm(semantic) + 1e-8)
-
         return semantic
 
     def consolidate_batch(self, memories: List[MemoryTrace]) -> Dict[str, Any]:
@@ -314,6 +350,7 @@ class MemoryConsolidator:
         results = {
             'attempted': len(memories),
             'consolidated': 0,
+            'relations_strengthened': 0,
             'details': []
         }
 
@@ -323,7 +360,53 @@ class MemoryConsolidator:
                 results['consolidated'] += 1
                 results['details'].append(result)
 
+        # Build knowledge graph from co-occurring memories
+        relations = self._extract_relations_from_batch(memories)
+        results['relations_strengthened'] = relations
+
         return results
+
+    def _extract_relations_from_batch(self, memories: List[MemoryTrace]) -> int:
+        """Extract and strengthen relations from co-occurring memories."""
+        strengthened = 0
+
+        # Track co-occurrences in this batch
+        mem_keys = []
+        for m in memories:
+            if m.source_episode:
+                mem_keys.append(m.source_episode)
+
+        # Update co-occurrence counts
+        for i, key1 in enumerate(mem_keys):
+            if key1 not in self.cooccurrence:
+                self.cooccurrence[key1] = {}
+            for key2 in mem_keys[i+1:]:
+                self.cooccurrence[key1][key2] = self.cooccurrence[key1].get(key2, 0) + 1
+
+                # If co-occurred enough times, create/strengthen relation
+                if self.cooccurrence[key1][key2] >= 3:
+                    self._strengthen_relation(key1, "related_to", key2)
+                    strengthened += 1
+
+        return strengthened
+
+    def _strengthen_relation(self, subject: str, relation: str, obj: str, amount: float = 0.1):
+        """Strengthen a relation in the knowledge graph."""
+        if subject not in self.knowledge_graph:
+            self.knowledge_graph[subject] = {}
+        if relation not in self.knowledge_graph[subject]:
+            self.knowledge_graph[subject][relation] = {}
+
+        current = self.knowledge_graph[subject][relation].get(obj, 0.0)
+        self.knowledge_graph[subject][relation][obj] = min(1.0, current + amount)
+
+    def add_relation(self, subject: str, relation: str, obj: str, strength: float = 0.5):
+        """Explicitly add a relation to the knowledge graph."""
+        self._strengthen_relation(subject, relation, obj, strength)
+
+    def get_relations(self, subject: str) -> Dict[str, Dict[str, float]]:
+        """Get all relations for a subject."""
+        return self.knowledge_graph.get(subject, {})
 
 
 class DreamGenerator:
@@ -631,3 +714,31 @@ class SleepConsolidationSystem:
             'dreams_recorded': len(self.dreams),
             'cycles_completed': self.sleep_cycle.cycles_completed
         }
+
+    def get_consolidation_queue_size(self) -> int:
+        """Get number of memories waiting for consolidation."""
+        return len(self.replay.replay_buffer)
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive stats for the sleep system."""
+        consolidated = sum(1 for m in self.consolidator.episodic_store if m.consolidated)
+        return {
+            'total_consolidated': consolidated,
+            'episodic_memories': len(self.consolidator.episodic_store),
+            'semantic_memories': len(self.consolidator.semantic_store),
+            'knowledge_graph_nodes': len(self.consolidator.knowledge_graph),
+            'replay_buffer': len(self.replay.replay_buffer),
+            'dreams_recorded': len(self.dreams),
+            'total_sleep_time': self.total_sleep_time
+        }
+
+    def run_consolidation_cycle(self, duration: float = 10.0):
+        """Run a complete consolidation cycle (simulated sleep)."""
+        self.start_sleep()
+
+        # Cycle through stages
+        steps = max(1, int(duration / 2))
+        for _ in range(steps):
+            self.sleep_step(2.0)
+
+        return self.wake_up()

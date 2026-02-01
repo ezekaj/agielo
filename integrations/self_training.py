@@ -183,7 +183,7 @@ class KnowledgeBase:
 
 class SelfTrainer:
     """
-    Self-training system that improves the AI over time.
+    Self-training system with CURIOSITY-DRIVEN learning.
 
     How it works:
     1. Learns facts from web searches
@@ -191,15 +191,63 @@ class SelfTrainer:
     3. Creates embeddings for semantic search
     4. Uses learned knowledge in future conversations
     5. Tracks what knowledge is useful (access patterns)
+    6. NEW: Prioritizes learning based on confidence + curiosity
+
+    Curiosity-driven: Learn what we DON'T know but ARE interested in.
     """
 
     def __init__(self, storage_path: str = None):
         self.kb = KnowledgeBase(storage_path)
         self.session_learning = []  # What we learned this session
 
+        # Curiosity and confidence tracking
+        self.topic_confidence: Dict[str, float] = {}  # How well we know each topic
+        self.topic_curiosity: Dict[str, float] = {}   # How interested we are
+        self.topic_exposure: Dict[str, int] = {}      # How many times seen
+
+        # Learning priority queue
+        self.learning_queue: List[Tuple[float, str]] = []  # (priority, topic)
+
+    def should_learn(self, topic: str) -> Tuple[bool, float, str]:
+        """
+        Decide if we should learn about this topic based on curiosity + confidence.
+
+        Returns:
+            (should_learn, priority, reason)
+        """
+        confidence = self.topic_confidence.get(topic, 0.3)  # Default: uncertain
+        curiosity = self.topic_curiosity.get(topic, 0.7)    # Default: curious
+        exposure = self.topic_exposure.get(topic, 0)
+
+        # Calculate learning priority
+        # High priority = low confidence + high curiosity (zone of proximal development)
+        uncertainty = 1.0 - confidence
+        novelty_bonus = 1.0 / (1.0 + exposure * 0.1)
+
+        priority = (uncertainty * 0.4 + curiosity * 0.4 + novelty_bonus * 0.2)
+
+        # Decision logic
+        if confidence > 0.85:
+            return False, 0.1, "already_expert"
+        if curiosity < 0.2 and confidence > 0.5:
+            return False, 0.2, "low_interest"
+        if priority > 0.5:
+            return True, priority, "curious_and_uncertain"
+        if exposure == 0:
+            return True, priority + 0.2, "novel_topic"
+
+        return priority > 0.4, priority, "moderate_interest"
+
     def learn(self, topic: str, content: str, source: str = "web") -> str:
-        """Learn a new fact."""
-        # Simple embedding (hash-based for now)
+        """Learn a new fact with curiosity tracking."""
+        # Check if we should learn this
+        should, priority, reason = self.should_learn(topic)
+
+        if not should and reason == "already_expert":
+            # Still record but don't prioritize
+            pass
+
+        # Create embedding
         embedding = self._create_embedding(content)
 
         fact_id = self.kb.add_fact(topic, content, source, embedding)
@@ -207,18 +255,69 @@ class SelfTrainer:
         self.session_learning.append({
             'topic': topic,
             'content': content[:100],
-            'time': datetime.now().isoformat()
+            'time': datetime.now().isoformat(),
+            'priority': priority,
+            'reason': reason
         })
+
+        # Update tracking
+        self.topic_exposure[topic] = self.topic_exposure.get(topic, 0) + 1
+
+        # Increase confidence slightly after learning
+        old_conf = self.topic_confidence.get(topic, 0.3)
+        self.topic_confidence[topic] = min(1.0, old_conf + 0.1)
+
+        # Decrease curiosity slightly (we learned something)
+        old_cur = self.topic_curiosity.get(topic, 0.7)
+        self.topic_curiosity[topic] = max(0.1, old_cur - 0.05)
 
         return fact_id
 
+    def boost_curiosity(self, topic: str, amount: float = 0.2):
+        """Boost curiosity for a topic (e.g., user showed interest)."""
+        current = self.topic_curiosity.get(topic, 0.5)
+        self.topic_curiosity[topic] = min(1.0, current + amount)
+
+    def record_success(self, topic: str):
+        """Record that we successfully used knowledge about this topic."""
+        current = self.topic_confidence.get(topic, 0.3)
+        self.topic_confidence[topic] = min(1.0, current + 0.15)
+
+    def record_failure(self, topic: str):
+        """Record that we failed on this topic - increases curiosity."""
+        # Decrease confidence
+        current_conf = self.topic_confidence.get(topic, 0.3)
+        self.topic_confidence[topic] = max(0.0, current_conf - 0.1)
+
+        # Increase curiosity (we need to learn more!)
+        current_cur = self.topic_curiosity.get(topic, 0.5)
+        self.topic_curiosity[topic] = min(1.0, current_cur + 0.2)
+
+    def get_learning_recommendations(self, k: int = 5) -> List[Tuple[str, float, str]]:
+        """Get top-k topics we should learn more about."""
+        recommendations = []
+
+        for topic in set(list(self.topic_confidence.keys()) + list(self.topic_curiosity.keys())):
+            should, priority, reason = self.should_learn(topic)
+            if should:
+                recommendations.append((topic, priority, reason))
+
+        recommendations.sort(key=lambda x: x[1], reverse=True)
+        return recommendations[:k]
+
     def _create_embedding(self, text: str) -> np.ndarray:
-        """Create a simple embedding for text."""
-        import hashlib
-        h = hashlib.sha256(text.encode()).digest()
-        full_hash = h * 4  # 128 bytes
-        emb = np.frombuffer(full_hash[:128], dtype=np.uint8).astype(np.float32)
-        return (emb / 127.5) - 1.0
+        """Create embedding for text."""
+        # Try to use semantic embeddings if available
+        try:
+            from integrations.semantic_embeddings import embed_text
+            return embed_text(text)
+        except ImportError:
+            # Fallback to hash-based
+            import hashlib
+            h = hashlib.sha256(text.encode()).digest()
+            full_hash = h * 4  # 128 bytes
+            emb = np.frombuffer(full_hash[:128], dtype=np.uint8).astype(np.float32)
+            return (emb / 127.5) - 1.0
 
     def recall(self, query: str, k: int = 3) -> List[str]:
         """Recall relevant knowledge for a query."""
@@ -232,16 +331,91 @@ class SelfTrainer:
         return [f['content'] for f in facts]
 
     def get_knowledge_for_prompt(self, query: str) -> str:
-        """Get relevant knowledge to inject into the prompt."""
-        relevant = self.recall(query, k=3)
+        """Get relevant knowledge to inject into the prompt.
 
+        Searches BOTH:
+        1. Knowledge base (facts.json)
+        2. Training data (training_data.jsonl) - Q&A pairs
+        """
+        knowledge_parts = []
+
+        # 1. Get from knowledge base
+        relevant = self.recall(query, k=3)
         if relevant:
+            for fact in relevant:
+                knowledge_parts.append(fact[:200])
+
+        # 2. Get from training_data.jsonl (Q&A pairs)
+        training_qa = self._search_training_data(query, k=3)
+        if training_qa:
+            for qa in training_qa:
+                # Format: "Q: ... A: ..."
+                knowledge_parts.append(f"Q: {qa['prompt'][:100]} A: {qa['completion'][:150]}")
+
+        if knowledge_parts:
             knowledge = "\n[Relevant knowledge I've learned:]"
-            for i, fact in enumerate(relevant, 1):
-                knowledge += f"\n{i}. {fact[:200]}"
+            for i, part in enumerate(knowledge_parts[:5], 1):  # Max 5 items
+                knowledge += f"\n{i}. {part}"
             return knowledge
 
         return ""
+
+    def _search_training_data(self, query: str, k: int = 3) -> List[Dict]:
+        """Search training_data.jsonl for relevant Q&A pairs."""
+        training_file = self.kb.storage_path / "training_data.jsonl"
+
+        if not training_file.exists():
+            return []
+
+        results = []
+        query_lower = query.lower()
+
+        # Extract meaningful words (same logic as search_facts)
+        stop_words = {'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been',
+                      'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
+                      'would', 'could', 'should', 'may', 'might', 'must', 'shall',
+                      'can', 'need', 'to', 'of', 'in', 'for', 'on', 'with', 'at',
+                      'by', 'from', 'as', 'what', 'which', 'who', 'how', 'why',
+                      'this', 'that', 'these', 'those', 'it', 'its', 'i', 'you'}
+
+        query_words = [w for w in query_lower.split() if w not in stop_words and len(w) > 2]
+
+        try:
+            with open(training_file, 'r') as f:
+                for line in f:
+                    try:
+                        qa = json.loads(line.strip())
+                        prompt = qa.get('prompt', '').lower()
+                        completion = qa.get('completion', '').lower()
+                        topic = qa.get('topic', '').lower()
+
+                        score = 0
+
+                        # Check each meaningful word
+                        for word in query_words:
+                            if word in prompt:
+                                score += 3
+                            if word in completion:
+                                score += 1
+                            if word in topic:
+                                score += 2
+
+                        # Bonus for multiple matches
+                        matching = sum(1 for w in query_words if w in prompt or w in completion or w in topic)
+                        if matching > 1:
+                            score += matching * 2
+
+                        if score > 0:
+                            results.append((qa, score))
+                    except json.JSONDecodeError:
+                        continue
+
+            # Sort by score and return top k
+            results.sort(key=lambda x: x[1], reverse=True)
+            return [qa for qa, score in results[:k]]
+
+        except Exception:
+            return []
 
     def save(self):
         """Save all knowledge to disk."""

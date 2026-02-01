@@ -167,7 +167,7 @@ class WorkingMemorySlot:
 
 class WorkingMemory:
     """
-    Active manipulation of limited items.
+    Active manipulation of limited items with ATTENTION SPOTLIGHT.
 
     Based on Baddeley's model:
     - Central Executive: Controls attention and coordinates
@@ -177,7 +177,9 @@ class WorkingMemory:
 
     Key properties:
     - Limited capacity: 7±2 items (Miller's Law)
-    - Decays without rehearsal
+    - Decays without rehearsal (exponential decay)
+    - Context priming via spreading activation
+    - Attention spotlight focuses on relevant items
     - Gateway to long-term memory
     """
 
@@ -187,6 +189,12 @@ class WorkingMemory:
 
         # The slots
         self.slots: List[Optional[WorkingMemorySlot]] = [None] * self.capacity
+
+        # Current attention focus (goal/context embedding)
+        self.attention_focus: Optional[np.ndarray] = None
+
+        # Decay parameters
+        self.decay_rate = 0.05  # Exponential decay rate
 
         # Subsystems
         self.phonological_loop: List[str] = []  # Verbal items for rehearsal
@@ -199,14 +207,64 @@ class WorkingMemory:
         # Lock for thread safety
         self.lock = threading.Lock()
 
-    def load(self, content: Any, embedding: np.ndarray, source: str = "") -> int:
+    def set_attention_focus(self, focus_embedding: np.ndarray):
+        """Set the current attention focus (goal/context)."""
+        self.attention_focus = focus_embedding.astype(PRECISION)
+        # Apply context priming - boost related items
+        self._apply_context_priming()
+
+    def _apply_context_priming(self):
+        """Boost activation of items related to current focus (spreading activation)."""
+        if self.attention_focus is None:
+            return
+
+        for slot in self.slots:
+            if slot is None:
+                continue
+
+            # Compute similarity to focus
+            similarity = np.dot(slot.embedding, self.attention_focus) / (
+                np.linalg.norm(slot.embedding) * np.linalg.norm(self.attention_focus) + 1e-8
+            )
+
+            # Boost activation proportional to similarity
+            if similarity > 0.3:
+                priming_boost = similarity * 0.3
+                slot.activation = min(1.0, slot.activation + priming_boost)
+
+    def apply_exponential_decay(self):
+        """Apply exponential decay to all items: activation *= exp(-k * time_elapsed)."""
+        current_time = time.time()
+        for slot in self.slots:
+            if slot is None:
+                continue
+
+            time_elapsed = current_time - slot.timestamp
+            decay_factor = np.exp(-self.decay_rate * time_elapsed)
+            slot.activation *= decay_factor
+
+            # Remove items that have decayed too much
+            if slot.activation < 0.05:
+                idx = self.slots.index(slot)
+                self.slots[idx] = None
+
+    def load(self, content: Any, embedding: np.ndarray, source: str = "",
+             goal_embedding: Optional[np.ndarray] = None) -> int:
         """
-        Load item into working memory.
+        Load item into working memory with ATTENTION SPOTLIGHT.
+
+        If goal_embedding provided, prioritizes slots by similarity to goal.
         Returns slot index, or -1 if failed.
         """
         with self.lock:
-            # Find empty slot or weakest item
-            slot_idx = self._find_slot()
+            # Apply decay before loading
+            self.apply_exponential_decay()
+
+            # Find best slot based on attention
+            if goal_embedding is not None:
+                slot_idx = self._find_slot_by_attention(embedding, goal_embedding)
+            else:
+                slot_idx = self._find_slot()
 
             self.slots[slot_idx] = WorkingMemorySlot(
                 content=content,
@@ -215,8 +273,42 @@ class WorkingMemory:
                 source=source
             )
 
+            # If we have attention focus, apply priming to new item
+            if self.attention_focus is not None:
+                similarity = np.dot(embedding, self.attention_focus) / (
+                    np.linalg.norm(embedding) * np.linalg.norm(self.attention_focus) + 1e-8
+                )
+                if similarity > 0.5:
+                    self.slots[slot_idx].activation = min(1.0, 1.0 + similarity * 0.2)
+
             self.total_items_processed += 1
             return slot_idx
+
+    def _find_slot_by_attention(self, new_embedding: np.ndarray,
+                                 goal_embedding: np.ndarray) -> int:
+        """Find slot using attention spotlight - keep relevant items."""
+        # First, look for empty slot
+        for i, slot in enumerate(self.slots):
+            if slot is None:
+                return i
+
+        # Compute relevance scores for existing items
+        scores = []
+        for i, slot in enumerate(self.slots):
+            if slot is None:
+                scores.append((i, -1))
+                continue
+
+            # Relevance = similarity to goal + activation
+            goal_sim = np.dot(slot.embedding, goal_embedding) / (
+                np.linalg.norm(slot.embedding) * np.linalg.norm(goal_embedding) + 1e-8
+            )
+            score = goal_sim * 0.6 + slot.activation * 0.4
+            scores.append((i, score))
+
+        # Replace LEAST relevant item (lowest score)
+        scores.sort(key=lambda x: x[1])
+        return scores[0][0]
 
     def _find_slot(self) -> int:
         """Find best slot: empty or lowest activation."""
@@ -226,9 +318,7 @@ class WorkingMemory:
                 return i
 
         # Decay all slots first
-        for slot in self.slots:
-            if slot:
-                slot.decay()
+        self.apply_exponential_decay()
 
         # Find lowest activation
         min_activation = float('inf')
