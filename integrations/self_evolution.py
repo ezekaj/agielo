@@ -132,6 +132,11 @@ class SelfEvolution:
         if training_count < 10:
             return False, f"Not enough training data ({training_count} pairs, need 10+)"
 
+        # Train if we have enough data (500+) even without improvement
+        # This bootstraps the model to USE the knowledge
+        if training_count >= 500 and self.state['total_trainings'] == 0:
+            return True, f"First training with {training_count} pairs - bootstrap learning!"
+
         if improvement >= min_improvement:
             return True, f"Improved {improvement:.1%} - ready to train!"
 
