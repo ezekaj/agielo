@@ -7,3 +7,4 @@ venv/
 *.egg-info/
 .cognitive_ai_knowledge/
 *.pkl
+*.log

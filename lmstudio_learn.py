@@ -29,14 +29,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 LMSTUDIO_HOST = os.environ.get("LMSTUDIO_HOST", "localhost")
 LMSTUDIO_PORT = os.environ.get("LMSTUDIO_PORT", "1234")
 LMSTUDIO_URL = f"http://{LMSTUDIO_HOST}:{LMSTUDIO_PORT}/v1/chat/completions"
-MODEL = "local-model"  # LM Studio uses this for the loaded model
+
+# Multiple models - workers rotate through them for load balancing
+# Set via env: LMSTUDIO_MODELS="qwen3-vl-8b,mistral-7b,llama-3-8b"
+MODELS = os.environ.get("LMSTUDIO_MODELS", "").split(",") if os.environ.get("LMSTUDIO_MODELS") else ["local-model"]
 
 
-def lmstudio_chat(prompt: str, timeout: int = 60) -> str:
+def lmstudio_chat(prompt: str, model: str = None, timeout: int = 60) -> str:
     """Chat with LM Studio's OpenAI-compatible API."""
     try:
         data = {
-            "model": MODEL,
+            "model": model or MODELS[0],
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "max_tokens": 1024,
@@ -201,7 +204,7 @@ def fetch_duckduckgo(query: str) -> List[Dict]:
     return items
 
 
-def analyze_content(content: str, title: str) -> Dict:
+def analyze_content(content: str, title: str, model: str = None) -> Dict:
     """Analyze content with LM Studio to extract Q&A pairs."""
     prompt = f"""Extract knowledge from this text. Return JSON only.
 
@@ -211,7 +214,7 @@ JSON format: {{"topic":"name","summary":"one sentence","facts":["fact1","fact2"]
 
 JSON:"""
 
-    response = lmstudio_chat(prompt)
+    response = lmstudio_chat(prompt, model=model)
 
     try:
         json_match = re.search(r'\{[^{}]*"topic"[^{}]*\}', response, re.DOTALL)
@@ -229,9 +232,10 @@ JSON:"""
     }
 
 
-def worker(worker_id: int, sources: List[str], shared_counter):
+def worker(worker_id: int, sources: List[str], shared_counter, model: str = None):
     """Learning worker process."""
-    print(f"[Worker {worker_id}] Starting with sources: {sources}")
+    assigned_model = model or MODELS[worker_id % len(MODELS)]
+    print(f"[Worker {worker_id}] Starting with sources: {sources} | Model: {assigned_model}")
 
     evolution = LMStudioEvolution()
 
@@ -267,7 +271,7 @@ def worker(worker_id: int, sources: List[str], shared_counter):
                     continue
 
                 # Analyze with LM Studio
-                analyzed = analyze_content(content, title)
+                analyzed = analyze_content(content, title, model=assigned_model)
 
                 summary = analyzed.get('summary', content[:200])
                 if evolution.is_duplicate(summary):
@@ -343,10 +347,14 @@ def main():
     # Distribute sources among workers
     all_sources = ['arxiv', 'wikipedia', 'web']
 
+    print(f"Models: {MODELS}")
+    print("=" * 60)
+
     workers = []
     for i in range(num_workers):
         sources = [all_sources[i % len(all_sources)]]
-        p = Process(target=worker, args=(i, sources, shared_counter))
+        model = MODELS[i % len(MODELS)]
+        p = Process(target=worker, args=(i, sources, shared_counter, model))
         p.start()
         workers.append(p)
 
