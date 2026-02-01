@@ -232,6 +232,15 @@ class Benchmark:
         reasoning_score = min(reasoning_count / 3, 1.0)
         scores.append(reasoning_score)
 
+        # Calculate weighted average: 50% exact, 30% keywords, 20% reasoning
+        if len(scores) >= 3:
+            return scores[0] * 0.5 + scores[1] * 0.3 + scores[2] * 0.2
+        elif len(scores) == 2:
+            return scores[0] * 0.6 + scores[1] * 0.4
+        elif len(scores) == 1:
+            return scores[0]
+        return 0.0
+
     def _score_creativity(self, response: str, test: Dict) -> float:
         """Score creative responses based on novelty and variety."""
         response_lower = response.lower()
