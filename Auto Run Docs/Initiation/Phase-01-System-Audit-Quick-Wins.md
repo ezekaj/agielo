@@ -22,11 +22,12 @@ This phase performs a comprehensive system audit and fixes the most impactful is
   - Verify all 28 benchmark tests score correctly by running the benchmark test
   - **Completed 2025-02-02**: Removed dead code (lines 411-414) from `_score_social_intelligence`. Verified all 28 tests run and score correctly.
 
-- [ ] Add robust error handling to the self-evolution cycle in `integrations/self_evolution.py`:
+- [x] Add robust error handling to the self-evolution cycle in `integrations/self_evolution.py`:
   - Wrap `_count_training_pairs()` file reading in try/except to handle corrupted JSONL
   - Add validation in `mark_learned()` to reject empty or whitespace-only content
   - Add a `reset_cycle()` method to recover from stuck states
   - Ensure `should_train()` never throws even with corrupted state files
+  - **Completed 2025-02-02**: Enhanced `_count_training_pairs()` to validate JSON structure and skip corrupted lines. Added empty/whitespace validation to `mark_learned()`. Implemented `reset_cycle(preserve_learned=True)` method for recovery. Wrapped `should_train()` in try/except for exception safety. Created 21 unit tests in `tests/test_self_evolution.py` - all passing.
 
 - [ ] Fix the training data path inconsistency:
   - `self_evolution.py` uses `~/.cognitive_ai_knowledge/training_data.jsonl`

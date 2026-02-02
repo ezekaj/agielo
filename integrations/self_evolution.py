@@ -38,6 +38,16 @@ class SelfEvolution:
         self.storage_path = Path(storage_path or os.path.expanduser("~/.cognitive_ai_knowledge/evolution"))
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
+        # Model paths - using your actual LM Studio model
+        self.mlx_model_path = os.path.expanduser(
+            "~/.lmstudio/models/lmstudio-community/Qwen3-VL-30B-A3B-Instruct-MLX-4bit"
+        )
+        self.hf_model_path = "Qwen/Qwen2.5-Coder-32B-Instruct"  # For LLaMA Factory (fallback)
+        self.adapters_path = self.storage_path / "adapters"
+        self.adapters_path.mkdir(parents=True, exist_ok=True)
+        self.llama_factory_output = self.storage_path / "llama_factory_output"
+        self.llama_factory_output.mkdir(parents=True, exist_ok=True)
+
         # Track learned content hashes (no duplicates)
         self.learned_hashes: Set[str] = set()
         self.learned_hashes_file = self.storage_path / "learned_hashes.json"
@@ -57,7 +67,8 @@ class SelfEvolution:
             'current_score': None,
             'total_trainings': 0,
             'improvements': [],
-            'added_functions': []
+            'added_functions': [],
+            'train_every_cycle': True  # NEW: train after every cycle
         }
         self.state_file = self.storage_path / "evolution_state.json"
         self._load_state()
@@ -77,7 +88,17 @@ class SelfEvolution:
         return h in self.learned_hashes
 
     def mark_learned(self, content: str) -> bool:
-        """Mark content as learned. Returns False if duplicate."""
+        """
+        Mark content as learned.
+
+        Returns:
+            True if content was learned successfully
+            False if duplicate or invalid (empty/whitespace-only)
+        """
+        # Validate content is not empty or whitespace-only
+        if not content or not content.strip():
+            return False
+
         h = self._hash_content(content)
         if h in self.learned_hashes:
             return False
@@ -121,38 +142,67 @@ class SelfEvolution:
         """
         Check if we should do MLX fine-tuning.
 
+        This method never throws - it returns safe defaults on any error.
+
         Returns:
             (should_train, reason)
         """
-        improvement = self.get_improvement()
+        try:
+            improvement = self.get_improvement()
 
-        # Count training pairs
-        training_count = self._count_training_pairs()
+            # Count training pairs
+            training_count = self._count_training_pairs()
 
-        if training_count < 10:
-            return False, f"Not enough training data ({training_count} pairs, need 10+)"
+            if training_count < 10:
+                return False, f"Not enough training data ({training_count} pairs, need 10+)"
 
-        # Train if we have enough data (500+) even without improvement
-        # This bootstraps the model to USE the knowledge
-        if training_count >= 500 and self.state['total_trainings'] == 0:
-            return True, f"First training with {training_count} pairs - bootstrap learning!"
+            # Train if we have enough data (500+) even without improvement
+            # This bootstraps the model to USE the knowledge
+            total_trainings = self.state.get('total_trainings', 0)
+            if training_count >= 500 and total_trainings == 0:
+                return True, f"First training with {training_count} pairs - bootstrap learning!"
 
-        if improvement >= min_improvement:
-            return True, f"Improved {improvement:.1%} - ready to train!"
+            if improvement >= min_improvement:
+                return True, f"Improved {improvement:.1%} - ready to train!"
 
-        if improvement < 0:
-            return False, f"Score decreased by {abs(improvement):.1%} - need more learning"
+            if improvement < 0:
+                return False, f"Score decreased by {abs(improvement):.1%} - need more learning"
 
-        return False, f"Only {improvement:.1%} improvement - need {min_improvement:.1%}+"
+            return False, f"Only {improvement:.1%} improvement - need {min_improvement:.1%}+"
+
+        except Exception as e:
+            # Fail safe - don't train if we can't determine state
+            return False, f"Error checking training readiness: {e}"
 
     def _count_training_pairs(self) -> int:
-        """Count training data pairs."""
+        """
+        Count valid training data pairs.
+
+        Handles corrupted JSONL by counting only valid JSON lines.
+        Returns 0 on any file access error.
+        """
         if not os.path.exists(self.training_data_file):
             return 0
         try:
-            with open(self.training_data_file, 'r') as f:
-                return sum(1 for _ in f)
-        except:
+            valid_count = 0
+            with open(self.training_data_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        data = json.loads(line)
+                        # Validate required fields exist and are non-empty
+                        if (isinstance(data, dict) and
+                            data.get('prompt', '').strip() and
+                            data.get('completion', '').strip()):
+                            valid_count += 1
+                    except json.JSONDecodeError:
+                        # Skip corrupted lines silently
+                        continue
+            return valid_count
+        except (IOError, OSError, UnicodeDecodeError) as e:
+            print(f"[Evolution] Warning: Could not read training data: {e}")
             return 0
 
     def start_new_cycle(self):
@@ -161,25 +211,82 @@ class SelfEvolution:
         self.state['facts_this_cycle'] = 0
         self._save_state()
 
-    def run_mlx_training(self, model_name: str = "ministral-3:8b") -> Dict:
+    def reset_cycle(self, preserve_learned: bool = True) -> Dict:
         """
-        Run actual MLX fine-tuning on MacBook.
+        Reset the evolution cycle to recover from stuck states.
 
-        This is REAL training that modifies the model.
+        Args:
+            preserve_learned: If True, keeps learned facts but resets cycle counters.
+                            If False, does a full reset including learned content.
+
+        Returns:
+            Dict with reset details and previous state info.
+        """
+        previous_state = {
+            'cycle': self.state['current_cycle'],
+            'facts_this_cycle': self.state['facts_this_cycle'],
+            'total_facts': len(self.learned_hashes),
+            'baseline_score': self.state['baseline_score'],
+            'current_score': self.state['current_score']
+        }
+
+        # Reset cycle-related state
+        self.state['current_cycle'] = 0
+        self.state['facts_this_cycle'] = 0
+        self.state['baseline_score'] = None
+        self.state['current_score'] = None
+
+        if not preserve_learned:
+            # Full reset - clear all learned content
+            self.learned_hashes.clear()
+            self.benchmark_history.clear()
+            self.state['total_trainings'] = 0
+            self.state['improvements'] = []
+            self.state['added_functions'] = []
+            self._save_hashes()
+            self._save_benchmark_history()
+
+        self._save_state()
+
+        return {
+            'success': True,
+            'preserve_learned': preserve_learned,
+            'previous_state': previous_state,
+            'message': 'Cycle reset. ' + (
+                'Learned facts preserved.' if preserve_learned
+                else 'Full reset completed.'
+            )
+        }
+
+    def run_mlx_training(self) -> Dict:
+        """
+        Run fine-tuning using MLX (best for Mac + MLX models).
+
+        Your model is MLX format, so we use MLX training directly.
+        """
+        # Use MLX directly for MLX models (faster on Mac)
+        print(f"[Training] Using MLX for your MLX model...")
+        result = self._run_mlx_training_fallback()
+
+        # Only try LLaMA Factory if MLX fails AND you have a HuggingFace model
+        if not result['success'] and 'mlx' not in self.mlx_model_path.lower():
+            print(f"[Training] MLX failed, trying LLaMA Factory...")
+            result = self.run_llama_factory_training()
+
+        return result
+
+    def run_llama_factory_training(self) -> Dict:
+        """
+        Run QLoRA fine-tuning using LLaMA Factory.
+
+        Better than MLX: more methods, better memory handling, web UI.
         """
         result = {
             'success': False,
             'message': '',
+            'method': 'llama_factory',
             'timestamp': datetime.now().isoformat()
         }
-
-        # Check if MLX is available
-        try:
-            import mlx
-            import mlx.core as mx
-        except ImportError:
-            result['message'] = "MLX not installed. Run: pip install mlx mlx-lm"
-            return result
 
         # Check training data
         training_count = self._count_training_pairs()
@@ -187,70 +294,195 @@ class SelfEvolution:
             result['message'] = f"Not enough training data: {training_count} pairs"
             return result
 
-        # Prepare training data in MLX format
-        mlx_data_file = self.storage_path / "mlx_training_data.jsonl"
-        self._prepare_mlx_data(mlx_data_file)
+        # Prepare training data in LLaMA Factory format (ShareGPT)
+        train_file = self.storage_path / "train.jsonl"
+        self._prepare_llama_factory_data(train_file)
 
-        # Run MLX fine-tuning
+        # Copy dataset_info.json to storage path
+        dataset_info = {
+            "cognitive_training": {
+                "file_name": "train.jsonl",
+                "formatting": "sharegpt",
+                "columns": {
+                    "messages": "messages"
+                }
+            }
+        }
+        with open(self.storage_path / "dataset_info.json", 'w') as f:
+            json.dump(dataset_info, f, indent=2)
+
         try:
-            print(f"\n[MLX] Starting fine-tuning with {training_count} examples...")
-            print(f"[MLX] This may take a few minutes on your M-series MacBook...")
+            print(f"\n[LLaMA Factory] Fine-tuning with {training_count} examples...")
+            print(f"[LLaMA Factory] Method: QLoRA (4-bit)")
+            print(f"[LLaMA Factory] Output: {self.llama_factory_output}")
 
-            # MLX-LM fine-tuning command
-            # Using LoRA for efficient training
             cmd = [
-                "python", "-m", "mlx_lm.lora",
-                "--model", model_name,
-                "--data", str(mlx_data_file),
+                "python3", "-m", "llamafactory.cli", "train",
+                "--model_name_or_path", self.hf_model_path,
+                "--stage", "sft",
+                "--do_train", "true",
+                "--finetuning_type", "lora",
+                "--quantization_bit", "4",
+                "--dataset_dir", str(self.storage_path),
+                "--dataset", "cognitive_training",
+                "--output_dir", str(self.llama_factory_output),
+                "--per_device_train_batch_size", "1",
+                "--gradient_accumulation_steps", "4",
+                "--learning_rate", "2e-4",
+                "--num_train_epochs", "1",
+                "--lora_rank", "16",
+                "--lora_alpha", "32",
+                "--lora_target", "all",
+                "--max_length", "1024",
+                "--logging_steps", "10",
+                "--save_steps", "100",
+                "--bf16", "true",
+                "--gradient_checkpointing", "true",
+                "--overwrite_output_dir", "true"
+            ]
+
+            print(f"[LLaMA Factory] Running training...")
+
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3600  # 1 hour max
+            )
+
+            if process.returncode == 0:
+                result['success'] = True
+                result['message'] = f"LLaMA Factory training completed! LoRA saved to {self.llama_factory_output}"
+                self.state['total_trainings'] += 1
+                self.state['improvements'].append({
+                    'cycle': self.state['current_cycle'],
+                    'training_pairs': training_count,
+                    'method': 'llama_factory',
+                    'timestamp': datetime.now().isoformat()
+                })
+                self._save_state()
+                print(f"[LLaMA Factory] Success! Training #{self.state['total_trainings']}")
+            else:
+                result['message'] = f"LLaMA Factory failed: {process.stderr[:500]}"
+                print(f"[LLaMA Factory] Error: {process.stderr[:500]}")
+
+        except subprocess.TimeoutExpired:
+            result['message'] = "LLaMA Factory training timed out (>1 hour)"
+        except FileNotFoundError:
+            result['message'] = "llamafactory-cli not found. Run: pip install llamafactory"
+        except Exception as e:
+            result['message'] = f"LLaMA Factory error: {str(e)}"
+
+        return result
+
+    def _prepare_llama_factory_data(self, output_file: Path):
+        """Convert training data to LLaMA Factory ShareGPT format."""
+        with open(self.training_data_file, 'r') as f_in:
+            with open(output_file, 'w') as f_out:
+                for line in f_in:
+                    try:
+                        data = json.loads(line)
+                        # ShareGPT format
+                        entry = {
+                            "messages": [
+                                {"role": "user", "content": data['prompt']},
+                                {"role": "assistant", "content": data['completion']}
+                            ]
+                        }
+                        f_out.write(json.dumps(entry) + '\n')
+                    except:
+                        continue
+        print(f"[LLaMA Factory] Prepared data at {output_file}")
+
+    def _run_mlx_training_fallback(self) -> Dict:
+        """Fallback to MLX LoRA if LLaMA Factory fails."""
+        result = {
+            'success': False,
+            'message': '',
+            'method': 'mlx',
+            'timestamp': datetime.now().isoformat()
+        }
+
+        training_count = self._count_training_pairs()
+        if training_count < 10:
+            result['message'] = f"Not enough training data: {training_count} pairs"
+            return result
+
+        train_file = self.storage_path / "train.jsonl"
+        valid_file = self.storage_path / "valid.jsonl"
+        self._prepare_mlx_data(train_file, valid_file)
+
+        try:
+            print(f"\n[MLX] Fine-tuning Qwen3 Coder 30B with {training_count} examples...")
+
+            cmd = [
+                "python3", "-m", "mlx_lm", "lora",
+                "--model", self.mlx_model_path,
                 "--train",
+                "--data", str(self.storage_path),
+                "--adapter-path", str(self.adapters_path),
                 "--batch-size", "1",
-                "--lora-layers", "4",
-                "--iters", "100"
+                "--num-layers", "8",
+                "--iters", "100",
+                "--learning-rate", "1e-5"
             ]
 
             process = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=600  # 10 minutes max
+                timeout=1800
             )
 
             if process.returncode == 0:
                 result['success'] = True
-                result['message'] = "MLX fine-tuning completed successfully!"
+                result['message'] = f"MLX fine-tuning completed! Adapters: {self.adapters_path}"
                 self.state['total_trainings'] += 1
                 self.state['improvements'].append({
                     'cycle': self.state['current_cycle'],
-                    'improvement': self.get_improvement(),
+                    'training_pairs': training_count,
+                    'method': 'mlx',
                     'timestamp': datetime.now().isoformat()
                 })
                 self._save_state()
             else:
-                result['message'] = f"MLX training failed: {process.stderr[:200]}"
+                result['message'] = f"MLX failed: {process.stderr[:300]}"
 
-        except subprocess.TimeoutExpired:
-            result['message'] = "MLX training timed out (>10 minutes)"
-        except FileNotFoundError:
-            result['message'] = "mlx_lm not found. Run: pip install mlx-lm"
         except Exception as e:
-            result['message'] = f"MLX training error: {str(e)}"
+            result['message'] = f"MLX error: {str(e)}"
 
         return result
 
-    def _prepare_mlx_data(self, output_file: Path):
-        """Convert training data to MLX format."""
+    def _prepare_mlx_data(self, train_file: Path, valid_file: Path):
+        """Convert training data to MLX format (train.jsonl + valid.jsonl)."""
+        all_data = []
+
         with open(self.training_data_file, 'r') as f_in:
-            with open(output_file, 'w') as f_out:
-                for line in f_in:
-                    try:
-                        data = json.loads(line)
-                        # MLX format: {"text": "<prompt>Response</prompt>"}
-                        mlx_entry = {
-                            "text": f"<s>[INST] {data['prompt']} [/INST] {data['completion']}</s>"
-                        }
-                        f_out.write(json.dumps(mlx_entry) + '\n')
-                    except:
-                        continue
+            for line in f_in:
+                try:
+                    data = json.loads(line)
+                    # MLX-LM format for Qwen: {"text": "prompt\nresponse"}
+                    mlx_entry = {
+                        "text": f"<|im_start|>user\n{data['prompt']}<|im_end|>\n<|im_start|>assistant\n{data['completion']}<|im_end|>"
+                    }
+                    all_data.append(mlx_entry)
+                except:
+                    continue
+
+        # Split 90/10 for train/valid
+        split_idx = int(len(all_data) * 0.9)
+        train_data = all_data[:split_idx]
+        valid_data = all_data[split_idx:] if split_idx < len(all_data) else all_data[-10:]
+
+        with open(train_file, 'w') as f:
+            for entry in train_data:
+                f.write(json.dumps(entry) + '\n')
+
+        with open(valid_file, 'w') as f:
+            for entry in valid_data:
+                f.write(json.dumps(entry) + '\n')
+
+        print(f"[MLX] Prepared {len(train_data)} train, {len(valid_data)} valid examples")
 
     def add_function(self, name: str, code: str, description: str) -> bool:
         """
