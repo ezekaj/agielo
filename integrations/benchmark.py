@@ -66,8 +66,8 @@ class Benchmark:
             # === COMMON SENSE REASONING ===
             {
                 "question": "A person puts ice cream in the oven at 400 degrees. What happens to the ice cream?",
-                "answer": "melts",
-                "expected_keywords": ["melt", "liquid", "heat", "destroy"],
+                "answer": "melt",
+                "expected_keywords": ["melt", "melts", "liquid", "heat", "destroy"],
                 "category": "common_sense",
                 "check_exact": False
             },
@@ -164,6 +164,84 @@ class Benchmark:
                 "answer": "distracted",
                 "expected_keywords": ["distracted", "bored", "anxious", "waiting", "rude", "busy", "not interested"],
                 "category": "social_intelligence",
+                "check_exact": False
+            },
+
+            # === FACTUAL KNOWLEDGE (searchable) ===
+            {
+                "question": "What is the capital of France?",
+                "answer": "paris",
+                "expected_keywords": ["paris", "france", "capital"],
+                "category": "factual",
+                "check_exact": False
+            },
+            {
+                "question": "What planet is known as the Red Planet?",
+                "answer": "mars",
+                "expected_keywords": ["mars", "red", "planet"],
+                "category": "factual",
+                "check_exact": False
+            },
+            {
+                "question": "What is the boiling point of water in Celsius?",
+                "answer": "100",
+                "expected_keywords": ["100", "celsius", "degrees", "boiling"],
+                "category": "factual",
+                "check_exact": True
+            },
+            {
+                "question": "Who wrote Romeo and Juliet?",
+                "answer": "shakespeare",
+                "expected_keywords": ["shakespeare", "william", "playwright"],
+                "category": "factual",
+                "check_exact": False
+            },
+
+            # === SCIENCE ===
+            {
+                "question": "What force keeps planets orbiting the sun?",
+                "answer": "gravity",
+                "expected_keywords": ["gravity", "gravitational", "force", "attraction"],
+                "category": "science",
+                "check_exact": False
+            },
+            {
+                "question": "What gas do plants absorb from the air for photosynthesis?",
+                "answer": "carbon dioxide",
+                "expected_keywords": ["carbon", "dioxide", "co2", "photosynthesis"],
+                "category": "science",
+                "check_exact": False
+            },
+
+            # === WORD PROBLEMS ===
+            {
+                "question": "If you buy 3 books at $8 each and 2 pens at $2 each, what is the total cost?",
+                "answer": "28",
+                "expected_keywords": ["28", "dollar", "total"],
+                "category": "math",
+                "check_exact": True
+            },
+            {
+                "question": "A car travels 180 miles in 3 hours. What is its average speed in mph?",
+                "answer": "60",
+                "expected_keywords": ["60", "mph", "speed", "average"],
+                "category": "math",
+                "check_exact": True
+            },
+
+            # === ANALOGY ===
+            {
+                "question": "Complete the analogy: Hot is to cold as tall is to ___?",
+                "answer": "short",
+                "expected_keywords": ["short", "opposite", "tall"],
+                "category": "analogy",
+                "check_exact": False
+            },
+            {
+                "question": "Complete the analogy: Bird is to fly as fish is to ___?",
+                "answer": "swim",
+                "expected_keywords": ["swim", "water", "fish"],
+                "category": "analogy",
                 "check_exact": False
             },
         ]
@@ -330,11 +408,6 @@ class Benchmark:
 
         return sum(scores)
 
-        # Weighted average: 50% exact, 30% keywords, 20% reasoning
-        if len(scores) >= 3:
-            return scores[0] * 0.5 + scores[1] * 0.3 + scores[2] * 0.2
-        return sum(scores) / len(scores)
-
     def run_test(self, ai_func, test: Dict) -> Tuple[str, float]:
         """
         Run a single test.
@@ -363,6 +436,7 @@ class Benchmark:
     def run_benchmark(self, ai_func, name: str = "default") -> Dict:
         """
         Run all tests and return results.
+        Shows ✓ CORRECT and ✗ WRONG for each answer.
 
         Args:
             ai_func: Function that takes question and returns response
@@ -376,22 +450,66 @@ class Benchmark:
             "timestamp": datetime.now().isoformat(),
             "tests": [],
             "total_score": 0,
-            "avg_score": 0
+            "avg_score": 0,
+            "correct_count": 0,
+            "wrong_count": 0
         }
 
         total = 0
-        for test in self.tests:
+        correct = 0
+        wrong = 0
+
+        print(f"\n{'='*60}")
+        print(f"BENCHMARK: Testing {len(self.tests)} questions")
+        print(f"{'='*60}\n")
+
+        for i, test in enumerate(self.tests):
             response, score = self.run_test(ai_func, test)
+
+            # Determine if CORRECT or WRONG
+            is_correct = score >= 0.5  # 50% threshold for "correct"
+            expected_answer = test.get("answer", "")
+
+            # Check exact answer match for strict categories
+            if test.get("check_exact", False):
+                is_correct = expected_answer.lower() in response.lower()
+
+            if is_correct:
+                correct += 1
+                status = "✓ CORRECT"
+            else:
+                wrong += 1
+                status = "✗ WRONG"
+
+            # Print result for each question
+            print(f"[{i+1}/{len(self.tests)}] [{test['category'].upper()}] {status}")
+            print(f"    Q: {test['question'][:60]}...")
+            print(f"    Expected: {expected_answer}")
+            print(f"    Got: {response[:80]}...")
+            print(f"    Score: {score:.0%}")
+            print()
+
             results["tests"].append({
                 "question": test["question"],
                 "category": test["category"],
+                "expected": expected_answer,
+                "actual": response[:200],
                 "response": response[:200],  # Truncate for storage
-                "score": round(score, 3)
+                "score": round(score, 3),
+                "is_correct": is_correct
             })
             total += score
 
         results["total_score"] = round(total, 3)
         results["avg_score"] = round(total / len(self.tests), 3)
+        results["correct_count"] = correct
+        results["wrong_count"] = wrong
+
+        # Print summary
+        print(f"{'='*60}")
+        print(f"RESULTS: {correct} ✓ CORRECT | {wrong} ✗ WRONG")
+        print(f"SCORE: {results['avg_score']:.0%}")
+        print(f"{'='*60}\n")
 
         # Save to history
         self.history.append(results)

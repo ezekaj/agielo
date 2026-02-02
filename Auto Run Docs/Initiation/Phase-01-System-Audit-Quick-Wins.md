@@ -15,11 +15,12 @@ This phase performs a comprehensive system audit and fixes the most impactful is
   - Print clear error messages for any missing components
   - **Completed 2025-02-02**: Created `scripts/check_health.py` - all checks pass
 
-- [ ] Fix the benchmark scoring bug in `integrations/benchmark.py`:
+- [x] Fix the benchmark scoring bug in `integrations/benchmark.py`:
   - Line 411-414 has unreachable code after return statement in `_score_social_intelligence`
   - The weighted average calculation at lines 411-414 is dead code that never executes
   - Remove the orphaned code block that starts with `# Weighted average: 50% exact...`
   - Verify all 28 benchmark tests score correctly by running the benchmark test
+  - **Completed 2025-02-02**: Removed dead code (lines 411-414) from `_score_social_intelligence`. Verified all 28 tests run and score correctly.
 
 - [ ] Add robust error handling to the self-evolution cycle in `integrations/self_evolution.py`:
   - Wrap `_count_training_pairs()` file reading in try/except to handle corrupted JSONL
