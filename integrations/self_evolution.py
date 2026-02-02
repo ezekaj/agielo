@@ -13,6 +13,7 @@ This creates TRUE self-improvement, not just RAG.
 """
 
 import os
+import sys
 import json
 import hashlib
 import subprocess
@@ -20,6 +21,14 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from datetime import datetime
+
+# Add parent directory to path for config import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.paths import (
+    KNOWLEDGE_DIR, EVOLUTION_DIR, TRAINING_DATA_FILE,
+    LEARNED_HASHES_FILE, BENCHMARK_HISTORY_FILE, EVOLUTION_STATE_FILE,
+    ADAPTERS_DIR, LLAMA_FACTORY_OUTPUT_DIR, MLX_MODEL_PATH, HF_MODEL_PATH
+)
 
 
 class SelfEvolution:
@@ -35,27 +44,25 @@ class SelfEvolution:
     """
 
     def __init__(self, storage_path: str = None):
-        self.storage_path = Path(storage_path or os.path.expanduser("~/.cognitive_ai_knowledge/evolution"))
+        self.storage_path = Path(storage_path) if storage_path else EVOLUTION_DIR
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-        # Model paths - using your actual LM Studio model
-        self.mlx_model_path = os.path.expanduser(
-            "~/.lmstudio/models/lmstudio-community/Qwen3-VL-30B-A3B-Instruct-MLX-4bit"
-        )
-        self.hf_model_path = "Qwen/Qwen2.5-Coder-32B-Instruct"  # For LLaMA Factory (fallback)
-        self.adapters_path = self.storage_path / "adapters"
+        # Model paths - using centralized config
+        self.mlx_model_path = str(MLX_MODEL_PATH)
+        self.hf_model_path = HF_MODEL_PATH
+        self.adapters_path = ADAPTERS_DIR if not storage_path else self.storage_path / "adapters"
         self.adapters_path.mkdir(parents=True, exist_ok=True)
-        self.llama_factory_output = self.storage_path / "llama_factory_output"
+        self.llama_factory_output = LLAMA_FACTORY_OUTPUT_DIR if not storage_path else self.storage_path / "llama_factory_output"
         self.llama_factory_output.mkdir(parents=True, exist_ok=True)
 
         # Track learned content hashes (no duplicates)
         self.learned_hashes: Set[str] = set()
-        self.learned_hashes_file = self.storage_path / "learned_hashes.json"
+        self.learned_hashes_file = LEARNED_HASHES_FILE if not storage_path else self.storage_path / "learned_hashes.json"
         self._load_hashes()
 
         # Benchmark history
         self.benchmark_history: List[Dict] = []
-        self.benchmark_file = self.storage_path / "benchmark_history.json"
+        self.benchmark_file = BENCHMARK_HISTORY_FILE if not storage_path else self.storage_path / "benchmark_history.json"
         self._load_benchmark_history()
 
         # Evolution state
@@ -70,11 +77,11 @@ class SelfEvolution:
             'added_functions': [],
             'train_every_cycle': True  # NEW: train after every cycle
         }
-        self.state_file = self.storage_path / "evolution_state.json"
+        self.state_file = EVOLUTION_STATE_FILE if not storage_path else self.storage_path / "evolution_state.json"
         self._load_state()
 
-        # Training data for MLX
-        self.training_data_file = os.path.expanduser("~/.cognitive_ai_knowledge/training_data.jsonl")
+        # Training data - using centralized config
+        self.training_data_file = str(TRAINING_DATA_FILE) if not storage_path else os.path.join(str(self.storage_path), "training_data.jsonl")
 
     def _hash_content(self, content: str) -> str:
         """Create hash of content to detect duplicates."""

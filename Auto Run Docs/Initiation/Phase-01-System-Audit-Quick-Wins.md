@@ -29,11 +29,12 @@ This phase performs a comprehensive system audit and fixes the most impactful is
   - Ensure `should_train()` never throws even with corrupted state files
   - **Completed 2025-02-02**: Enhanced `_count_training_pairs()` to validate JSON structure and skip corrupted lines. Added empty/whitespace validation to `mark_learned()`. Implemented `reset_cycle(preserve_learned=True)` method for recovery. Wrapped `should_train()` in try/except for exception safety. Created 21 unit tests in `tests/test_self_evolution.py` - all passing.
 
-- [ ] Fix the training data path inconsistency:
+- [x] Fix the training data path inconsistency:
   - `self_evolution.py` uses `~/.cognitive_ai_knowledge/training_data.jsonl`
   - `super_agent.py` saves to `/Users/tolga/Desktop/mcp-test/super_agent_training.jsonl` (hardcoded path at line 568)
   - Update `super_agent.py` to use the same path as self_evolution
   - Create a constants file `config/paths.py` with all shared paths
+  - **Completed 2025-02-02**: Created `config/paths.py` with centralized path constants. Updated both `self_evolution.py` and `super_agent.py` to import and use `TRAINING_DATA_FILE` from the shared config. Created 16 unit tests in `tests/test_paths.py` - all passing. Both modules now write to `~/.cognitive_ai_knowledge/training_data.jsonl`.
 
 - [ ] Create the Working directory and add a system status reporter:
   - Create `Auto Run Docs/Initiation/Working/` directory
