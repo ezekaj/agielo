@@ -83,7 +83,7 @@ class SuperAgent:
             with urllib.request.urlopen(req, timeout=5) as resp:
                 print(f"[OK] LM Studio connected: {self.model}")
                 return True
-        except:
+        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
             print(f"[Warning] LM Studio not running at {self.lm_studio_url}")
             return False
 
@@ -220,7 +220,8 @@ class SuperAgent:
                         with urllib.request.urlopen(req, timeout=10) as resp:
                             result["readme"] = resp.read().decode('utf-8')[:2000]
                         break
-                    except:
+                    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
+                        # Try next branch (main/master fallback)
                         continue
 
                 # Fetch file list
@@ -240,11 +241,14 @@ class SuperAgent:
                             req = urllib.request.Request(code_url, headers={'User-Agent': 'Mozilla/5.0'})
                             with urllib.request.urlopen(req, timeout=10) as resp:
                                 result["code"] = resp.read().decode('utf-8')[:1500]
-                        except:
+                        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as e:
+                            # Code file not accessible - silently skip
                             pass
-                except:
+                except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, json.JSONDecodeError) as e:
+                    # API request failed - silently skip
                     pass
-        except:
+        except (ValueError, IndexError, AttributeError) as e:
+            # URL parsing failed - silently skip
             pass
         return result
 
@@ -589,7 +593,7 @@ def main():
 
     agent = SuperAgent(
         lm_studio_url="http://localhost:1234/v1",
-        model="qwen/qwen3-vl-30b"
+        model="zai-org/glm-4.7-flash"
     )
 
     # Test 1: Fast search

@@ -62,7 +62,25 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Added imports for `json` and `logging` at module level
     - Fallback behavior preserved: new installations or corrupted state files start fresh
 
-- [ ] Scan remaining integration files for bare excepts: `self_evolution.py`, `self_training.py`, `super_agent.py`, `cognitive_ollama.py`, `code_evolution.py` and fix each one with specific exception handling.
+- [x] Scan remaining integration files for bare excepts: `self_evolution.py`, `self_training.py`, `super_agent.py`, `cognitive_ollama.py`, `code_evolution.py` and fix each one with specific exception handling.
+  - **COMPLETED (2026-02-03)**: Scanned all 5 files and fixed 14 bare excepts total:
+    - `self_evolution.py`: Fixed 5 bare excepts at lines 426, 502, 883, 895, 908
+      - Lines 426, 502: JSON parsing during data prep → `(json.JSONDecodeError, KeyError, TypeError)`
+      - Lines 883, 895, 908: State/history file loading → `(json.JSONDecodeError, IOError, OSError, TypeError)`
+    - `self_training.py`: Fixed 3 bare excepts at lines 46, 56, 66
+      - Line 46: Facts loading → `(json.JSONDecodeError, IOError, OSError, TypeError)`
+      - Line 56: Embeddings loading → `(pickle.UnpicklingError, IOError, OSError, EOFError, TypeError)`
+      - Line 66: Stats loading → `(json.JSONDecodeError, IOError, OSError, TypeError)`
+    - `super_agent.py`: Fixed 5 bare excepts at lines 86, 223, 243, 245, 247
+      - Line 86: LM Studio connection → `(urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError)`
+      - Line 223: README fetch → `(urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError)`
+      - Lines 243, 245: GitHub API/code fetch → `(urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError, json.JSONDecodeError)`
+      - Line 247: URL parsing → `(ValueError, IndexError, AttributeError)`
+    - `code_evolution.py`: Fixed 1 bare except at line 461
+      - Line 461: History loading → `(json.JSONDecodeError, IOError, OSError, TypeError)`
+    - `cognitive_ollama.py`: Already clean - no bare excepts found
+  - All handlers include descriptive comments explaining the expected failure scenarios
+  - Tests pass: 350 passed (12 pre-existing failures in unrelated test_ebbinghaus_forgetting.py)
 
 ---
 

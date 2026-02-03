@@ -7,7 +7,8 @@ The AI evolves itself through:
 2. Benchmarking (measure progress)
 3. MLX Fine-tuning (when improved)
 4. Architecture modification (add layers/functions)
-5. Reflection (what worked)
+5. Code self-modification (generate, validate, deploy code)
+6. Reflection (what worked)
 
 This creates TRUE self-improvement, not just RAG.
 """
@@ -19,7 +20,7 @@ import hashlib
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 from datetime import datetime
 
 # Add parent directory to path for config import
@@ -29,6 +30,17 @@ from config.paths import (
     LEARNED_HASHES_FILE, BENCHMARK_HISTORY_FILE, EVOLUTION_STATE_FILE,
     ADAPTERS_DIR, LLAMA_FACTORY_OUTPUT_DIR, MLX_MODEL_PATH, HF_MODEL_PATH
 )
+
+# Import code evolution system for true self-modification
+try:
+    from integrations.code_evolution import (
+        CodeEvolution, CodeChangeType, ValidationResult,
+        get_code_evolution
+    )
+    CODE_EVOLUTION_AVAILABLE = True
+except ImportError:
+    CODE_EVOLUTION_AVAILABLE = False
+    print("[SelfEvolution] Warning: code_evolution not available, self-modification disabled")
 
 
 class SelfEvolution:
@@ -75,6 +87,7 @@ class SelfEvolution:
             'total_trainings': 0,
             'improvements': [],
             'added_functions': [],
+            'code_modifications': [],  # Track code self-modifications
             'train_every_cycle': True  # NEW: train after every cycle
         }
         self.state_file = EVOLUTION_STATE_FILE if not storage_path else self.storage_path / "evolution_state.json"
@@ -82,6 +95,15 @@ class SelfEvolution:
 
         # Training data - using centralized config
         self.training_data_file = str(TRAINING_DATA_FILE) if not storage_path else os.path.join(str(self.storage_path), "training_data.jsonl")
+
+        # Initialize code evolution system for true self-modification
+        self.code_evolution: Optional[CodeEvolution] = None
+        if CODE_EVOLUTION_AVAILABLE:
+            try:
+                self.code_evolution = CodeEvolution(self.storage_path / "code_evolution")
+                print("[SelfEvolution] Code evolution system initialized")
+            except Exception as e:
+                print(f"[SelfEvolution] Warning: Could not initialize code evolution: {e}")
 
     def _hash_content(self, content: str) -> str:
         """Create hash of content to detect duplicates."""
@@ -115,8 +137,12 @@ class SelfEvolution:
         return True
 
     def should_benchmark(self) -> bool:
-        """Check if we should run benchmark (every 100 facts)."""
+        """Check if enough facts learned for cycle completion (every 100 facts)."""
         return self.state['facts_this_cycle'] >= self.state['facts_per_cycle']
+
+    def cycle_complete(self) -> bool:
+        """Alias for should_benchmark - check if cycle is complete."""
+        return self.should_benchmark()
 
     def record_benchmark(self, score: float, details: Dict = None):
         """Record benchmark result."""
@@ -397,7 +423,8 @@ class SelfEvolution:
                             ]
                         }
                         f_out.write(json.dumps(entry) + '\n')
-                    except:
+                    except (json.JSONDecodeError, KeyError, TypeError) as e:
+                        # Skip malformed entries silently - expected for corrupted training data
                         continue
         print(f"[LLaMA Factory] Prepared data at {output_file}")
 
@@ -473,7 +500,8 @@ class SelfEvolution:
                         "text": f"<|im_start|>user\n{data['prompt']}<|im_end|>\n<|im_start|>assistant\n{data['completion']}<|im_end|>"
                     }
                     all_data.append(mlx_entry)
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    # Skip malformed entries silently - expected for corrupted training data
                     continue
 
         # Split 90/10 for train/valid
@@ -496,7 +524,59 @@ class SelfEvolution:
         Add a new function to the AI's capabilities.
 
         This is self-modification - the AI adds new code to itself.
+        Uses the CodeEvolution system for validation and safe deployment.
         """
+        # Use CodeEvolution if available (preferred - validates and sandboxes)
+        if self.code_evolution:
+            return self._add_function_safe(name, code, description)
+
+        # Fallback to legacy method (no validation)
+        return self._add_function_legacy(name, code, description)
+
+    def _add_function_safe(self, name: str, code: str, description: str) -> bool:
+        """Add function using CodeEvolution with validation and testing."""
+        try:
+            # Propose the change (validates and tests)
+            change = self.code_evolution.propose_change(
+                change_type=CodeChangeType.NEW_FUNCTION,
+                new_code=code,
+                description=description
+            )
+
+            # Check validation result
+            if change.validation_result != ValidationResult.VALID:
+                print(f"[Evolution] Function '{name}' failed validation: {change.validation_result}")
+                return False
+
+            # Deploy the validated code
+            success = self.code_evolution.deploy_change(change)
+
+            if success:
+                # Record in state
+                self.state['added_functions'].append({
+                    'name': name,
+                    'description': description,
+                    'timestamp': datetime.now().isoformat(),
+                    'change_id': change.id,
+                    'validated': True
+                })
+                self.state['code_modifications'].append({
+                    'type': 'new_function',
+                    'name': name,
+                    'change_id': change.id,
+                    'timestamp': datetime.now().isoformat()
+                })
+                self._save_state()
+                print(f"[Evolution] Successfully added validated function: {name}")
+
+            return success
+
+        except Exception as e:
+            print(f"[Evolution] Error adding function safely: {e}")
+            return False
+
+    def _add_function_legacy(self, name: str, code: str, description: str) -> bool:
+        """Legacy method - adds function without validation (not recommended)."""
         functions_file = self.storage_path / "added_functions.py"
 
         try:
@@ -504,6 +584,7 @@ class SelfEvolution:
             with open(functions_file, 'a') as f:
                 f.write(f"\n\n# Added: {datetime.now().isoformat()}\n")
                 f.write(f"# Description: {description}\n")
+                f.write(f"# WARNING: Not validated (legacy method)\n")
                 f.write(code)
                 f.write("\n")
 
@@ -511,7 +592,8 @@ class SelfEvolution:
             self.state['added_functions'].append({
                 'name': name,
                 'description': description,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': datetime.now().isoformat(),
+                'validated': False
             })
             self._save_state()
 
@@ -519,6 +601,213 @@ class SelfEvolution:
         except Exception as e:
             print(f"[Evolution] Failed to add function: {e}")
             return False
+
+    def modify_code(self, target_file: str, old_code: str, new_code: str, description: str) -> bool:
+        """
+        Modify existing code in the repository.
+
+        This is TRUE self-modification - the AI changes its own source code.
+        Requires CodeEvolution for safety validation.
+        """
+        if not self.code_evolution:
+            print("[Evolution] Code modification requires CodeEvolution system")
+            return False
+
+        try:
+            # Propose the modification
+            change = self.code_evolution.propose_change(
+                change_type=CodeChangeType.MODIFY_FUNCTION,
+                new_code=new_code,
+                description=description,
+                target_file=target_file,
+                original_code=old_code
+            )
+
+            if change.validation_result != ValidationResult.VALID:
+                print(f"[Evolution] Modification failed validation: {change.validation_result}")
+                return False
+
+            # Deploy the change
+            success = self.code_evolution.deploy_change(change)
+
+            if success:
+                self.state['code_modifications'].append({
+                    'type': 'modify',
+                    'target_file': target_file,
+                    'change_id': change.id,
+                    'description': description,
+                    'timestamp': datetime.now().isoformat()
+                })
+                self._save_state()
+                print(f"[Evolution] Successfully modified code in {target_file}")
+
+            return success
+
+        except Exception as e:
+            print(f"[Evolution] Error modifying code: {e}")
+            return False
+
+    def optimize_function(self, func_name: str, optimized_code: str, description: str) -> bool:
+        """
+        Optimize an existing function with improved code.
+
+        Used when the AI learns a better implementation.
+        """
+        if not self.code_evolution:
+            print("[Evolution] Optimization requires CodeEvolution system")
+            return False
+
+        try:
+            change = self.code_evolution.propose_change(
+                change_type=CodeChangeType.OPTIMIZATION,
+                new_code=optimized_code,
+                description=f"Optimize {func_name}: {description}"
+            )
+
+            if change.validation_result != ValidationResult.VALID:
+                print(f"[Evolution] Optimization failed validation")
+                return False
+
+            success = self.code_evolution.deploy_change(change)
+
+            if success:
+                self.state['code_modifications'].append({
+                    'type': 'optimization',
+                    'function': func_name,
+                    'change_id': change.id,
+                    'description': description,
+                    'timestamp': datetime.now().isoformat()
+                })
+                self._save_state()
+
+            return success
+
+        except Exception as e:
+            print(f"[Evolution] Error optimizing function: {e}")
+            return False
+
+    def rollback_last_modification(self) -> bool:
+        """
+        Rollback the last code modification.
+
+        Safety mechanism if a change causes problems.
+        """
+        if not self.code_evolution:
+            print("[Evolution] Rollback requires CodeEvolution system")
+            return False
+
+        success = self.code_evolution.rollback_last()
+
+        if success and self.state['code_modifications']:
+            rolled_back = self.state['code_modifications'].pop()
+            rolled_back['rolled_back'] = True
+            rolled_back['rollback_time'] = datetime.now().isoformat()
+            self._save_state()
+            print(f"[Evolution] Rolled back modification: {rolled_back.get('description', 'unknown')}")
+
+        return success
+
+    def call_evolved_function(self, name: str, *args, **kwargs) -> Any:
+        """
+        Call a function that was added through evolution.
+
+        This allows using capabilities the AI has created for itself.
+        """
+        if not self.code_evolution:
+            print("[Evolution] Evolved functions require CodeEvolution system")
+            return None
+
+        try:
+            return self.code_evolution.call_evolved_function(name, *args, **kwargs)
+        except Exception as e:
+            print(f"[Evolution] Error calling evolved function '{name}': {e}")
+            return None
+
+    def get_evolved_functions(self) -> Dict[str, Any]:
+        """Get all functions the AI has created through evolution."""
+        if not self.code_evolution:
+            return {}
+        return self.code_evolution.get_active_functions()
+
+    def get_code_evolution_stats(self) -> Dict:
+        """Get statistics about code evolution."""
+        if not self.code_evolution:
+            return {'available': False}
+
+        stats = self.code_evolution.get_stats()
+        stats['available'] = True
+        stats['total_modifications'] = len(self.state.get('code_modifications', []))
+        return stats
+
+    # === SELF-INTROSPECTION ===
+    # The AI can read and understand its own code
+
+    def read_own_code(self, file_path: str) -> Optional[str]:
+        """
+        Read the AI's own source code.
+
+        Args:
+            file_path: Relative path like "integrations/self_evolution.py"
+
+        Example:
+            code = evo.read_own_code("integrations/benchmark.py")
+        """
+        if not self.code_evolution:
+            print("[Evolution] Introspection requires CodeEvolution system")
+            return None
+        return self.code_evolution.read_own_code(file_path)
+
+    def read_own_function(self, file_path: str, function_name: str) -> Optional[str]:
+        """
+        Read a specific function from the AI's source.
+
+        Example:
+            func_code = evo.read_own_function("integrations/self_evolution.py", "should_train")
+        """
+        if not self.code_evolution:
+            return None
+        return self.code_evolution.read_own_function(file_path, function_name)
+
+    def list_own_functions(self, file_path: str) -> List[Dict]:
+        """
+        List all functions in one of the AI's source files.
+
+        Returns list of {name, args, docstring, lineno}.
+        """
+        if not self.code_evolution:
+            return []
+        return self.code_evolution.list_own_functions(file_path)
+
+    def search_own_code(self, pattern: str) -> List[Dict]:
+        """
+        Search for a pattern across all source code.
+
+        Example:
+            matches = evo.search_own_code("def.*benchmark")
+        """
+        if not self.code_evolution:
+            return []
+        return self.code_evolution.search_own_code(pattern)
+
+    def analyze_own_code(self, file_path: str) -> Dict:
+        """
+        Analyze complexity of a source file.
+
+        Helps identify functions that need optimization.
+        """
+        if not self.code_evolution:
+            return {}
+        return self.code_evolution.analyze_own_code(file_path)
+
+    def find_own_files(self) -> List[str]:
+        """
+        List all Python files in the project.
+
+        Returns list of relative paths.
+        """
+        if not self.code_evolution:
+            return []
+        return self.code_evolution.find_own_files()
 
     def reflect(self) -> str:
         """Generate reflection on current evolution state."""
@@ -539,6 +828,7 @@ Current score: {current_str}
 Improvement: {improvement:+.1%}
 MLX trainings: {trainings}
 Functions added: {len(self.state['added_functions'])}
+Code modifications: {len(self.state.get('code_modifications', []))}
 
 """
 
@@ -551,6 +841,24 @@ Functions added: {len(self.state['added_functions'])}
 
         if trainings > 0:
             reflection += f"✓ TRAINED: Model fine-tuned {trainings} times\n"
+
+        # Add code evolution status
+        if self.code_evolution:
+            code_stats = self.get_code_evolution_stats()
+            reflection += f"\n=== CODE SELF-MODIFICATION ===\n"
+            reflection += f"Active evolved functions: {code_stats.get('active_functions', 0)}\n"
+            reflection += f"Deployed changes: {code_stats.get('deployed_changes', 0)}\n"
+            reflection += f"Rollbacks: {code_stats.get('rollbacks', 0)}\n"
+
+            # Show recent modifications
+            mods = self.state.get('code_modifications', [])[-3:]
+            if mods:
+                reflection += "\nRecent modifications:\n"
+                for mod in mods:
+                    status = "↩" if mod.get('rolled_back') else "✓"
+                    reflection += f"  {status} {mod.get('type', 'unknown')}: {mod.get('description', 'no desc')[:50]}\n"
+        else:
+            reflection += "\n⚠ Code self-modification: DISABLED (CodeEvolution not available)\n"
 
         return reflection
 
@@ -574,7 +882,8 @@ Functions added: {len(self.state['added_functions'])}
             try:
                 with open(self.learned_hashes_file, 'r') as f:
                     self.learned_hashes = set(json.load(f))
-            except:
+            except (json.JSONDecodeError, IOError, OSError, TypeError) as e:
+                # Start fresh if hashes file is corrupted or unreadable
                 self.learned_hashes = set()
 
     def _save_hashes(self):
@@ -586,7 +895,8 @@ Functions added: {len(self.state['added_functions'])}
             try:
                 with open(self.benchmark_file, 'r') as f:
                     self.benchmark_history = json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError, TypeError) as e:
+                # Start fresh if benchmark file is corrupted or unreadable
                 self.benchmark_history = []
 
     def _save_benchmark_history(self):
@@ -599,7 +909,8 @@ Functions added: {len(self.state['added_functions'])}
                 with open(self.state_file, 'r') as f:
                     loaded = json.load(f)
                     self.state.update(loaded)
-            except:
+            except (json.JSONDecodeError, IOError, OSError, KeyError, TypeError) as e:
+                # Use default state if file is corrupted or unreadable
                 pass
 
     def _save_state(self):

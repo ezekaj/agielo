@@ -43,7 +43,8 @@ class KnowledgeBase:
             try:
                 with open(self.facts_file, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError, TypeError) as e:
+                # Return empty list if facts file is corrupted or unreadable
                 pass
         return []
 
@@ -53,7 +54,8 @@ class KnowledgeBase:
             try:
                 with open(self.embeddings_file, 'rb') as f:
                     return pickle.load(f)
-            except:
+            except (pickle.UnpicklingError, IOError, OSError, EOFError, TypeError) as e:
+                # Return empty dict if embeddings file is corrupted or unreadable
                 pass
         return {}
 
@@ -63,7 +65,8 @@ class KnowledgeBase:
             try:
                 with open(self.stats_file, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError, TypeError) as e:
+                # Return default stats if file is corrupted or unreadable
                 pass
         return {
             'total_facts': 0,
@@ -114,7 +117,17 @@ class KnowledgeBase:
         return fact_id
 
     def search_facts(self, query: str, query_embedding: np.ndarray = None, k: int = 5) -> List[Dict]:
-        """Search for relevant facts - understands the whole query as one request."""
+        """
+        Search for relevant facts with enhanced matching.
+
+        Features:
+        - Whole query matching (highest priority)
+        - Individual word matching with stemming
+        - Fuzzy/partial matching for typos
+        - Semantic similarity if embedding provided
+        - Multi-word concept bonuses
+        - Recency boost for recent facts
+        """
         results = []
         query_lower = query.lower()
 
@@ -139,26 +152,97 @@ class KnowledgeBase:
         # Get meaningful words from query
         query_words = [w for w in query_lower.split() if w not in stop_words and len(w) > 2]
 
+        # Also get word stems (simple suffix removal)
+        query_stems = set()
+        for w in query_words:
+            query_stems.add(w)
+            # Simple stemming
+            if w.endswith('ing'):
+                query_stems.add(w[:-3])
+            elif w.endswith('ed'):
+                query_stems.add(w[:-2])
+            elif w.endswith('s') and len(w) > 3:
+                query_stems.add(w[:-1])
+            elif w.endswith('ly'):
+                query_stems.add(w[:-2])
+
         for fact in self.facts:
-            score = 0
+            score = 0.0
             fact_topic = fact['topic'].lower()
             fact_content = fact['content'].lower()
+            fact_text = f"{fact_topic} {fact_content}"
 
-            # Check if WHOLE query concept matches (higher score)
-            if query_lower in fact_topic or query_lower in fact_content:
+            # 1. Check if WHOLE query concept matches (highest priority)
+            if query_lower in fact_topic:
+                score += 10
+            elif query_lower in fact_content:
                 score += 5
 
-            # Check each meaningful word against topic and content
+            # 2. Check each meaningful word against topic and content
+            word_matches = 0
             for word in query_words:
                 if word in fact_topic:
                     score += 3  # Topic match is important
-                if word in fact_content:
+                    word_matches += 1
+                elif word in fact_content:
                     score += 1  # Content match
+                    word_matches += 1
+                else:
+                    # Check stems
+                    for stem in query_stems:
+                        if stem in fact_text and len(stem) > 3:
+                            score += 0.5
+                            break
 
-            # Bonus if multiple words match (understands the whole request)
-            matching_words = sum(1 for w in query_words if w in fact_topic or w in fact_content)
-            if matching_words > 1:
-                score += matching_words * 2  # Bonus for matching multiple concepts
+            # 3. Fuzzy matching for typos/variations
+            if word_matches == 0 and query_words:
+                # Try partial/fuzzy matching
+                for word in query_words:
+                    if len(word) >= 4:
+                        # Substring match
+                        if word[:4] in fact_text:
+                            score += 0.3
+                        # Character overlap
+                        for fact_word in fact_text.split():
+                            if len(fact_word) >= 4:
+                                overlap = len(set(word) & set(fact_word))
+                                if overlap >= len(word) * 0.7:
+                                    score += 0.2
+                                    break
+
+            # 4. Multi-word concept bonus
+            if word_matches > 1:
+                score += word_matches * 2  # Bonus for matching multiple concepts
+
+            # 5. Semantic similarity boost (if embedding provided)
+            if query_embedding is not None and fact['id'] in self.embeddings:
+                fact_emb = self.embeddings[fact['id']]
+                # Ensure embeddings are 1D arrays
+                q_emb = np.asarray(query_embedding).flatten()
+                f_emb = np.asarray(fact_emb).flatten()
+                # Cosine similarity
+                dot_product = float(np.dot(q_emb, f_emb))
+                norm_q = float(np.linalg.norm(q_emb))
+                norm_f = float(np.linalg.norm(f_emb))
+                sim = dot_product / (norm_q * norm_f + 1e-8)
+                if sim > 0.5:
+                    score += sim * 3  # Boost for semantic similarity
+
+            # 6. Recency boost (recent facts slightly preferred)
+            try:
+                fact_time = datetime.fromisoformat(fact.get('timestamp', ''))
+                age_days = (datetime.now() - fact_time).days
+                if age_days < 7:
+                    score += 0.5
+                elif age_days < 30:
+                    score += 0.2
+            except (ValueError, TypeError):
+                pass
+
+            # 7. Access count boost (frequently accessed = likely useful)
+            access_count = fact.get('access_count', 0)
+            if access_count > 0:
+                score += min(1.0, access_count * 0.1)
 
             if score > 0:
                 results.append((fact, score))
@@ -353,9 +437,10 @@ class SelfTrainer:
                 knowledge_parts.append(f"Q: {qa['prompt'][:100]} A: {qa['completion'][:150]}")
 
         if knowledge_parts:
-            knowledge = "\n[Relevant knowledge I've learned:]"
+            knowledge = "\n\n[IMPORTANT - Use this knowledge to answer:]"
             for i, part in enumerate(knowledge_parts[:5], 1):  # Max 5 items
                 knowledge += f"\n{i}. {part}"
+            knowledge += "\n\n[Use the above facts in your answer. If the answer is there, use it directly.]"
             return knowledge
 
         return ""

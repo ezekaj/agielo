@@ -458,7 +458,8 @@ class CodeVersionControl:
             try:
                 with open(self.history_file, 'r') as f:
                     return json.load(f)
-            except:
+            except (json.JSONDecodeError, IOError, OSError, TypeError) as e:
+                # Return empty history if file is corrupted or unreadable
                 return []
         return []
 
