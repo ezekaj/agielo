@@ -180,13 +180,14 @@ Random Network Distillation for smarter exploration of what to learn.
 
 Ebbinghaus-style forgetting with spaced repetition for better memory.
 
-- [ ] Enhance forgetting model in `neuro_memory/memory/forgetting.py`:
+- [x] Enhance forgetting model in `neuro_memory/memory/forgetting.py`:
   - Add `EbbinghausForgetting` class alongside existing `ForgettingModel`
   - Formula: R = e^(-t/S) where R=retention, t=time, S=stability
   - Stability increases with each successful retrieval (spaced repetition)
   - Track per-memory: `last_access`, `access_count`, `stability_score`
   - `compute_retention(memory_id, current_time) -> float`
   - `should_forget(memory_id, threshold=0.3) -> bool`
+  - **Completed 2026-02-03**: Created `EbbinghausForgetting` class with full implementation. Includes `MemoryState` dataclass tracking memory_id, created_at, last_access, access_count, stability_score, initial_retention. `EbbinghausConfig` for configurable parameters (base_stability, stability_multiplier, forget_threshold, min/max_stability). Core methods: `register_memory()`, `compute_retention()` with exact R=e^(-t/S) formula, `should_forget()` with configurable threshold, `record_retrieval()` for spaced repetition (stability increases on success, resets on failure), `get_all_retentions()`, `get_memories_below_threshold()`, `get_statistics()`. State persistence via JSON. All 32 tests pass in `tests/test_ebbinghaus_forgetting.py`.
 
 - [ ] Add spaced repetition scheduling in `neuro_memory/memory/forgetting.py`:
   - `SpacedRepetitionScheduler` class

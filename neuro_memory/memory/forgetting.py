@@ -12,9 +12,11 @@ References:
 """
 
 import numpy as np
-from typing import List
+import json
+from typing import List, Dict, Optional, Any, Tuple
 from datetime import datetime, timedelta
-from dataclasses import dataclass
+from dataclasses import dataclass, field, asdict
+from pathlib import Path
 
 
 @dataclass
@@ -72,7 +74,7 @@ class ForgettingEngine:
             # Exponential decay: A(t) = A0 * e^(-dt)
             activation = boosted_activation * np.exp(-self.config.decay_rate * time_elapsed)
 
-        return max(activation, self.config.min_activation)
+        return float(max(activation, self.config.min_activation))
 
     def should_forget(
         self,
@@ -105,7 +107,378 @@ class ForgettingEngine:
         # Sigmoid function around min_activation threshold
         x = (activation - self.config.min_activation) / self.config.min_activation
         prob = 1 / (1 + np.exp(x * 5))  # Steepness = 5
-        return prob
+        return float(prob)
+
+
+@dataclass
+class MemoryState:
+    """
+    State tracking for a single memory item with Ebbinghaus forgetting.
+
+    Tracks the stability score which increases with each successful retrieval,
+    implementing spaced repetition principles.
+    """
+    memory_id: str
+    created_at: float  # Unix timestamp
+    last_access: float  # Unix timestamp of last retrieval
+    access_count: int = 0  # Number of successful retrievals
+    stability_score: float = 1.0  # Stability S in R = e^(-t/S) formula
+    initial_retention: float = 1.0  # Starting retention (usually 1.0)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "memory_id": self.memory_id,
+            "created_at": self.created_at,
+            "last_access": self.last_access,
+            "access_count": self.access_count,
+            "stability_score": self.stability_score,
+            "initial_retention": self.initial_retention
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MemoryState":
+        """Create from dictionary."""
+        return cls(
+            memory_id=data["memory_id"],
+            created_at=data["created_at"],
+            last_access=data["last_access"],
+            access_count=data.get("access_count", 0),
+            stability_score=data.get("stability_score", 1.0),
+            initial_retention=data.get("initial_retention", 1.0)
+        )
+
+
+@dataclass
+class EbbinghausConfig:
+    """Configuration for Ebbinghaus forgetting model."""
+    base_stability: float = 1.0  # Initial stability (in hours)
+    stability_multiplier: float = 1.5  # How much stability increases on successful retrieval
+    forget_threshold: float = 0.3  # Retention threshold below which memory may be forgotten
+    min_stability: float = 0.5  # Minimum stability score
+    max_stability: float = 720.0  # Maximum stability (30 days in hours)
+
+
+class EbbinghausForgetting:
+    """
+    Ebbinghaus-style forgetting with spaced repetition.
+
+    Implements the forgetting formula: R = e^(-t/S)
+    where:
+    - R = retention (0-1)
+    - t = time since last access
+    - S = stability (increases with each successful retrieval)
+
+    The stability score increases with each successful retrieval,
+    implementing the core principle of spaced repetition: memories
+    become more stable the more they are retrieved.
+    """
+
+    def __init__(
+        self,
+        config: Optional[EbbinghausConfig] = None,
+        state_path: Optional[Path] = None
+    ):
+        """
+        Initialize EbbinghausForgetting.
+
+        Args:
+            config: Configuration for forgetting parameters
+            state_path: Path to save/load memory states
+        """
+        self.config = config or EbbinghausConfig()
+        self.state_path = state_path
+        self._memory_states: Dict[str, MemoryState] = {}
+
+        if self.state_path and self.state_path.exists():
+            self._load_state()
+
+    def register_memory(
+        self,
+        memory_id: str,
+        initial_retention: float = 1.0,
+        timestamp: Optional[float] = None
+    ) -> MemoryState:
+        """
+        Register a new memory for forgetting tracking.
+
+        Args:
+            memory_id: Unique identifier for the memory
+            initial_retention: Starting retention level (default 1.0)
+            timestamp: When memory was created (default: now)
+
+        Returns:
+            The created MemoryState
+        """
+        now = timestamp or datetime.now().timestamp()
+
+        state = MemoryState(
+            memory_id=memory_id,
+            created_at=now,
+            last_access=now,
+            access_count=0,
+            stability_score=self.config.base_stability,
+            initial_retention=initial_retention
+        )
+
+        self._memory_states[memory_id] = state
+        self._save_state()
+        return state
+
+    def get_memory_state(self, memory_id: str) -> Optional[MemoryState]:
+        """Get the state for a memory."""
+        return self._memory_states.get(memory_id)
+
+    def compute_retention(
+        self,
+        memory_id: str,
+        current_time: Optional[float] = None
+    ) -> float:
+        """
+        Compute current retention for a memory.
+
+        Formula: R = e^(-t/S)
+
+        Args:
+            memory_id: ID of the memory
+            current_time: Current timestamp (default: now)
+
+        Returns:
+            Retention value in [0, 1], or 0 if memory not found
+        """
+        state = self._memory_states.get(memory_id)
+        if state is None:
+            return 0.0
+
+        now = current_time or datetime.now().timestamp()
+
+        # Time since last access in hours
+        time_elapsed_hours = (now - state.last_access) / 3600.0
+
+        # Ensure time is non-negative
+        time_elapsed_hours = max(0, time_elapsed_hours)
+
+        # Ebbinghaus formula: R = e^(-t/S)
+        retention = np.exp(-time_elapsed_hours / state.stability_score)
+
+        # Scale by initial retention
+        retention = retention * state.initial_retention
+
+        return float(max(0.0, min(1.0, retention)))
+
+    def should_forget(
+        self,
+        memory_id: str,
+        threshold: Optional[float] = None,
+        current_time: Optional[float] = None
+    ) -> bool:
+        """
+        Determine if a memory should be forgotten.
+
+        Args:
+            memory_id: ID of the memory
+            threshold: Retention threshold (default: config.forget_threshold)
+            current_time: Current timestamp (default: now)
+
+        Returns:
+            True if retention is below threshold
+        """
+        threshold = threshold if threshold is not None else self.config.forget_threshold
+        retention = self.compute_retention(memory_id, current_time)
+        return retention < threshold
+
+    def record_retrieval(
+        self,
+        memory_id: str,
+        success: bool = True,
+        current_time: Optional[float] = None
+    ) -> Optional[MemoryState]:
+        """
+        Record a memory retrieval attempt.
+
+        Successful retrieval increases stability (spaced repetition).
+        Failed retrieval resets stability to minimum.
+
+        Args:
+            memory_id: ID of the memory
+            success: Whether retrieval was successful
+            current_time: Timestamp of retrieval (default: now)
+
+        Returns:
+            Updated MemoryState or None if memory not found
+        """
+        state = self._memory_states.get(memory_id)
+        if state is None:
+            return None
+
+        now = current_time or datetime.now().timestamp()
+
+        state.last_access = now
+        state.access_count += 1
+
+        if success:
+            # Increase stability on successful retrieval
+            new_stability = state.stability_score * self.config.stability_multiplier
+            state.stability_score = min(new_stability, self.config.max_stability)
+        else:
+            # Reset stability on failed retrieval
+            state.stability_score = self.config.min_stability
+
+        self._save_state()
+        return state
+
+    def get_all_retentions(
+        self,
+        current_time: Optional[float] = None
+    ) -> Dict[str, float]:
+        """
+        Get current retention for all memories.
+
+        Args:
+            current_time: Current timestamp (default: now)
+
+        Returns:
+            Dict mapping memory_id to retention
+        """
+        return {
+            memory_id: self.compute_retention(memory_id, current_time)
+            for memory_id in self._memory_states
+        }
+
+    def get_memories_below_threshold(
+        self,
+        threshold: Optional[float] = None,
+        current_time: Optional[float] = None
+    ) -> List[Tuple[str, float]]:
+        """
+        Get memories with retention below threshold.
+
+        Args:
+            threshold: Retention threshold (default: config.forget_threshold)
+            current_time: Current timestamp (default: now)
+
+        Returns:
+            List of (memory_id, retention) tuples sorted by retention ascending
+        """
+        threshold = threshold if threshold is not None else self.config.forget_threshold
+
+        below_threshold = [
+            (mid, retention)
+            for mid, retention in self.get_all_retentions(current_time).items()
+            if retention < threshold
+        ]
+
+        return sorted(below_threshold, key=lambda x: x[1])
+
+    def get_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about the forgetting system.
+
+        Returns:
+            Dict with statistics
+        """
+        if not self._memory_states:
+            return {
+                "total_memories": 0,
+                "avg_stability": 0.0,
+                "avg_retention": 0.0,
+                "memories_at_risk": 0,
+                "stability_distribution": {}
+            }
+
+        retentions = self.get_all_retentions()
+        stabilities = [s.stability_score for s in self._memory_states.values()]
+        access_counts = [s.access_count for s in self._memory_states.values()]
+
+        # Stability distribution buckets (in hours)
+        stability_buckets = {
+            "< 1h": 0,
+            "1-6h": 0,
+            "6-24h": 0,
+            "1-7d": 0,
+            "> 7d": 0
+        }
+
+        for stability in stabilities:
+            if stability < 1:
+                stability_buckets["< 1h"] += 1
+            elif stability < 6:
+                stability_buckets["1-6h"] += 1
+            elif stability < 24:
+                stability_buckets["6-24h"] += 1
+            elif stability < 168:
+                stability_buckets["1-7d"] += 1
+            else:
+                stability_buckets["> 7d"] += 1
+
+        return {
+            "total_memories": len(self._memory_states),
+            "avg_stability": float(np.mean(stabilities)),
+            "max_stability": float(np.max(stabilities)),
+            "min_stability": float(np.min(stabilities)),
+            "avg_retention": float(np.mean(list(retentions.values()))),
+            "avg_access_count": float(np.mean(access_counts)),
+            "memories_at_risk": len(self.get_memories_below_threshold()),
+            "stability_distribution": stability_buckets
+        }
+
+    def remove_memory(self, memory_id: str) -> bool:
+        """
+        Remove a memory from tracking.
+
+        Args:
+            memory_id: ID of memory to remove
+
+        Returns:
+            True if memory was found and removed
+        """
+        if memory_id in self._memory_states:
+            del self._memory_states[memory_id]
+            self._save_state()
+            return True
+        return False
+
+    def _save_state(self):
+        """Save memory states to disk if path configured."""
+        if self.state_path is None:
+            return
+
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "memories": {
+                    mid: state.to_dict()
+                    for mid, state in self._memory_states.items()
+                },
+                "config": {
+                    "base_stability": self.config.base_stability,
+                    "stability_multiplier": self.config.stability_multiplier,
+                    "forget_threshold": self.config.forget_threshold,
+                    "min_stability": self.config.min_stability,
+                    "max_stability": self.config.max_stability
+                }
+            }
+            with open(self.state_path, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Warning: Failed to save forgetting state: {e}")
+
+    def _load_state(self):
+        """Load memory states from disk."""
+        if self.state_path is None or not self.state_path.exists():
+            return
+
+        try:
+            with open(self.state_path, 'r') as f:
+                data = json.load(f)
+
+            self._memory_states = {
+                mid: MemoryState.from_dict(state_data)
+                for mid, state_data in data.get("memories", {}).items()
+            }
+        except Exception as e:
+            print(f"Warning: Failed to load forgetting state: {e}")
+            self._memory_states = {}
 
 
 if __name__ == "__main__":
@@ -137,4 +510,39 @@ if __name__ == "__main__":
                                                rehearsal_count=rehearsals, current_time=test_time)
         print(f"  {rehearsals} rehearsals: activation={activation:.3f}")
 
-    print("\n✓ Forgetting test complete!")
+    print("\n✓ ForgettingEngine test complete!")
+
+    # Test Ebbinghaus forgetting
+    print("\n=== Ebbinghaus Forgetting Test ===\n")
+
+    ebbinghaus = EbbinghausForgetting()
+
+    # Register a test memory
+    memory = ebbinghaus.register_memory("test_memory_1")
+    print(f"Registered memory: {memory.memory_id}")
+    print(f"  Initial stability: {memory.stability_score:.2f}h")
+
+    # Test retention decay over time
+    print("\nRetention decay over time (R = e^(-t/S)):")
+    base_time = datetime.now().timestamp()
+    for hours in [0, 1, 2, 4, 8, 12, 24]:
+        test_time = base_time + hours * 3600
+        retention = ebbinghaus.compute_retention("test_memory_1", test_time)
+        should_forget = ebbinghaus.should_forget("test_memory_1", current_time=test_time)
+        print(f"  After {hours:2d}h: retention={retention:.3f}, should_forget={should_forget}")
+
+    # Test spaced repetition effect
+    print("\nSpaced repetition effect (stability increases with retrieval):")
+    ebbinghaus2 = EbbinghausForgetting()
+    ebbinghaus2.register_memory("spaced_memory")
+
+    base_time = datetime.now().timestamp()
+    for i in range(5):
+        retrieval_time = base_time + i * 3600  # 1 hour intervals
+        ebbinghaus2.record_retrieval("spaced_memory", success=True, current_time=retrieval_time)
+        state = ebbinghaus2.get_memory_state("spaced_memory")
+        retention_1h_later = ebbinghaus2.compute_retention("spaced_memory", retrieval_time + 3600)
+        print(f"  After {i+1} retrievals: stability={state.stability_score:.2f}h, "
+              f"retention(+1h)={retention_1h_later:.3f}")
+
+    print("\n✓ Ebbinghaus test complete!")
