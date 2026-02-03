@@ -55,7 +55,12 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Line 337: In `close()` method, replaced bare except with `except (OSError, RuntimeError, AttributeError) as e:` with warning message
   - All exception handlers now use specific types or capture the exception for logging
 
-- [ ] Fix `integrations/neuro_memory_integration.py:101` - Replace bare except in memory load with specific exception and proper fallback behavior.
+- [x] Fix `integrations/neuro_memory_integration.py:101` - Replace bare except in memory load with specific exception and proper fallback behavior.
+  - **COMPLETED (2026-02-03)**: Replaced bare `except:` with specific exception types:
+    - `except (FileNotFoundError, json.JSONDecodeError, IOError, OSError, KeyError, TypeError, ValueError) as e:`
+    - Added proper logging with `logging.debug()` showing exception type and message
+    - Added imports for `json` and `logging` at module level
+    - Fallback behavior preserved: new installations or corrupted state files start fresh
 
 - [ ] Scan remaining integration files for bare excepts: `self_evolution.py`, `self_training.py`, `super_agent.py`, `cognitive_ollama.py`, `code_evolution.py` and fix each one with specific exception handling.
 

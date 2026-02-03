@@ -13,6 +13,8 @@ Components integrated:
 This transforms the AI from simple fact storage to human-like memory!
 """
 
+import json
+import logging
 import numpy as np
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
@@ -98,8 +100,10 @@ class NeuroMemorySystem:
         # Try to load existing state
         try:
             self.memory_store.load_state()
-        except:
-            pass
+        except (FileNotFoundError, json.JSONDecodeError, IOError, OSError, KeyError, TypeError, ValueError) as e:
+            # Memory state couldn't be loaded - this is fine for new installations
+            # or when the state file is corrupted/incompatible
+            logging.debug(f"Could not load memory state (starting fresh): {type(e).__name__}: {e}")
 
     def _init_retriever(self):
         """Initialize two-stage retriever."""
