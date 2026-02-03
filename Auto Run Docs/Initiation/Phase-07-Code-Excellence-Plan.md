@@ -109,7 +109,15 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - Added comprehensive docstring explaining thread safety contract
 
 ### 7B.2 - Fix Test Functions Pattern
-- [ ] Fix `tests/test_search.py` - Replace all `return True/False` statements with proper `assert` statements. All 4 test functions (`test_semantic_embeddings`, `test_search_ranking`, `test_memory_search`, `test_concurrent_search`) should use assertions instead of return values.
+- [x] Fix `tests/test_search.py` - Replace all `return True/False` statements with proper `assert` statements. All 4 test functions (`test_semantic_embeddings`, `test_search_ranking`, `test_memory_search`, `test_concurrent_search`) should use assertions instead of return values.
+  - **COMPLETED (2026-02-03)**: Converted all 4 test functions from return-based to assert-based testing:
+    - `test_semantic_embeddings()`: Added `assert all_passed` and `assert ai_related_ranked_higher` at end
+    - `test_two_stage_retriever()`: Added `assert all_passed` at end
+    - `test_knowledge_base_search()`: Added `assert all_passed` at end
+    - `test_web_learner()`: Added `assert all_passed` at end
+    - Updated `run_all_tests()` to catch `AssertionError` separately from other exceptions
+    - Updated `__main__` block to use try/except for exit code
+  - All 4 test suites pass successfully
 
 - [ ] Review and fix `tests/test_active_learning_rnd.py`, `tests/test_ebbinghaus_forgetting.py`, `tests/test_rnd_curiosity.py` for same pattern issues.
 
