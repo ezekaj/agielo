@@ -257,7 +257,23 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
       - `test_atexit_registered`: Verifies cleanup function is registered with atexit
   - All 32 active_learning_rnd tests pass, 461/462 total project tests pass (1 pre-existing failure in test_search.py unrelated to this change)
 
-- [ ] Add `atexit` cleanup to `integrations/self_evolution.py` - Save evolution state on exit.
+- [x] Add `atexit` cleanup to `integrations/self_evolution.py` - Save evolution state on exit.
+  - **COMPLETED (2026-02-03)**: Implemented atexit cleanup handler for SelfEvolution:
+    - Added `import atexit` and `import weakref` at module level
+    - Created `cleanup()` method that saves hashes, benchmark history, and evolution state on exit
+    - Created `_self_evolution_instances` list with weak references to track all instances
+    - Created `_cleanup_all_instances()` function registered with `atexit.register()` to cleanup all instances on program exit
+    - Created `_register_instance()` function to register instances on creation (called in `__init__`)
+    - Added 8 new tests in `TestSelfEvolutionCleanup` class:
+      - `test_cleanup_method_exists`: Verifies cleanup method exists and is callable
+      - `test_cleanup_saves_state`: Verifies all state files are saved
+      - `test_cleanup_saves_correct_data`: Verifies persisted data can be reloaded
+      - `test_cleanup_handles_errors_gracefully`: Verifies errors don't raise exceptions
+      - `test_instance_registration`: Verifies instances are registered in the weak reference list
+      - `test_cleanup_all_instances_function`: Verifies all instances are cleaned up
+      - `test_cleanup_handles_dead_weakrefs`: Verifies garbage collected instances don't cause errors
+      - `test_atexit_registered`: Verifies cleanup function is registered with atexit
+  - All 29 self_evolution tests pass
 
 - [ ] Add `atexit` cleanup to `integrations/rnd_curiosity.py` - Save RND model state on exit.
 

@@ -19,6 +19,8 @@ import json
 import hashlib
 import subprocess
 import time
+import atexit
+import weakref
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple, Any
 from datetime import datetime
@@ -41,6 +43,27 @@ try:
 except ImportError:
     CODE_EVOLUTION_AVAILABLE = False
     print("[SelfEvolution] Warning: code_evolution not available, self-modification disabled")
+
+
+# Track instances for atexit cleanup using weak references
+_self_evolution_instances: List[weakref.ref] = []
+
+
+def _cleanup_all_instances():
+    """Cleanup function called at program exit to save all SelfEvolution state."""
+    for ref in _self_evolution_instances:
+        instance = ref()
+        if instance is not None:
+            instance.cleanup()
+
+
+# Register the cleanup function with atexit
+atexit.register(_cleanup_all_instances)
+
+
+def _register_instance(instance: 'SelfEvolution'):
+    """Register a SelfEvolution instance for cleanup on exit."""
+    _self_evolution_instances.append(weakref.ref(instance))
 
 
 class SelfEvolution:
@@ -104,6 +127,9 @@ class SelfEvolution:
                 print("[SelfEvolution] Code evolution system initialized")
             except Exception as e:
                 print(f"[SelfEvolution] Warning: Could not initialize code evolution: {e}")
+
+        # Register for cleanup on program exit
+        _register_instance(self)
 
     def _hash_content(self, content: str) -> str:
         """Create hash of content to detect duplicates."""
@@ -916,6 +942,31 @@ Code modifications: {len(self.state.get('code_modifications', []))}
     def _save_state(self):
         with open(self.state_file, 'w') as f:
             json.dump(self.state, f, indent=2)
+
+    def cleanup(self):
+        """
+        Cleanup resources and save state on exit.
+
+        This method is registered with atexit to ensure state is saved
+        when the program terminates. It saves:
+        - Learned content hashes
+        - Benchmark history
+        - Evolution state (cycles, improvements, code modifications)
+        """
+        try:
+            # Save all state
+            self._save_hashes()
+            self._save_benchmark_history()
+            self._save_state()
+
+            facts_count = len(self.learned_hashes)
+            benchmarks_count = len(self.benchmark_history)
+            mods_count = len(self.state.get('code_modifications', []))
+
+            print(f"[SelfEvolution] Cleanup complete: saved {facts_count} hashes, "
+                  f"{benchmarks_count} benchmarks, {mods_count} code modifications")
+        except Exception as e:
+            print(f"[SelfEvolution] Cleanup error: {e}")
 
 
 # Global instance
