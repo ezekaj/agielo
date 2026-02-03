@@ -10,18 +10,20 @@ The chat system has several issues affecting response quality:
 
 ## Tasks
 
-- [ ] Add a `_clean_response()` method to `integrations/cognitive_ollama.py` that:
+- [x] Add a `_clean_response()` method to `integrations/cognitive_ollama.py` that:
   - Strips `<think>...</think>` blocks from responses (keep only content after `</think>`)
   - Removes other common artifacts like `[System]`, `[Internal]`, excessive newlines
   - Truncates responses over a reasonable limit (e.g., 4000 chars)
   - Call this method in `chat()` before returning the response
+  - **COMPLETED**: Method exists at lines 116-141, called in `chat()` at line 222. Added 19 unit tests in `tests/test_cognitive_ollama.py` - all passing.
 
-- [ ] Add a proper system prompt in `integrations/cognitive_ollama.py`:
+- [x] Add a proper system prompt in `integrations/cognitive_ollama.py`:
   - Create a `DEFAULT_SYSTEM_PROMPT` constant that instructs the model to:
     - Be concise and direct
     - Not output thinking/reasoning in `<think>` tags
     - Focus on actionable answers
   - Pass this as the default `system_prompt` if none provided
+  - **COMPLETED**: `DEFAULT_SYSTEM_PROMPT` exists at lines 44-52 with all required guidance. Used in `chat()` at line 218. Tests in `tests/test_cognitive_ollama.py::TestDefaultSystemPrompt` - 4 tests passing.
 
 - [ ] Fix the "improve yourself" false positive in `chat.py`:
   - The `meta_phrases` check at line 2103-2105 already exists but only skips knowledge injection
