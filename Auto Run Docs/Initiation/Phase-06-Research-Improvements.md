@@ -48,7 +48,7 @@ Replaces the current Python-based sandbox with true Docker isolation for safe co
 
 Maintain multiple code variants and evolve the best ones (like Darwin Godel Machine).
 
-- [ ] Create population evolution system in `integrations/population_evolution.py`:
+- [x] Create population evolution system in `integrations/population_evolution.py`:
   - Create `CodeIndividual` dataclass: code, fitness_score, generation, parent_id, mutations
   - Create `Population` class with: individuals list, generation counter, hall_of_fame
   - `Population.add_individual(code, fitness)` - add new variant
@@ -58,8 +58,9 @@ Maintain multiple code variants and evolve the best ones (like Darwin Godel Mach
   - `Population.evaluate_fitness(individual, test_cases)` - run tests, compute fitness
   - `Population.evolve_generation()` - create next generation from current
   - Save/load population state to `evolution_dir/population.json`
+  - **Completed 2026-02-03**: Created `integrations/population_evolution.py` with full `CodeIndividual` dataclass, `Population` class with tournament selection, AST-based crossover via `CodeCrossover`, fitness evaluation using sandbox, generation evolution with elitism, hall of fame tracking, diversity calculation, and lineage tracking. All 24 tests pass in `tests/test_population_evolution.py`.
 
-- [ ] Add code variation strategies in `integrations/population_evolution.py`:
+- [x] Add code variation strategies in `integrations/population_evolution.py`:
   - `ParameterMutation`: change numeric constants (+/- 10-50%)
   - `StructureMutation`: swap if/else branches, change loop types
   - `OperatorMutation`: change +/-, *//, and/or
@@ -67,6 +68,7 @@ Maintain multiple code variants and evolve the best ones (like Darwin Godel Mach
   - `ExpansionMutation`: add error handling, add type hints
   - Each mutation: parse AST, modify, unparse, validate
   - Mutations should preserve code correctness (validate after each)
+  - **Completed 2026-02-03**: Implemented `CodeMutator` class with all 5 mutation types: `ParameterMutation` (changes numeric constants by +/-50%), `StructureMutation` (swaps if/else branches), `OperatorMutation` (swaps +/-, *//, and/or, ==/!=), `SimplificationMutation` (removes dead code like x+0), `ExpansionMutation` (adds type hints). All mutations use AST parsing, modification, unparsing, and validation.
 
 - [ ] Integrate population evolution into `integrations/code_evolution.py`:
   - Add `use_population: bool = False` parameter to `CodeEvolution.__init__()`
