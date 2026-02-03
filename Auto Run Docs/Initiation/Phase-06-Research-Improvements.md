@@ -33,13 +33,14 @@ Replaces the current Python-based sandbox with true Docker isolation for safe co
   - Update `CodeValidator.DANGEROUS_CALLS` - can be more permissive with Docker isolation
   - **Completed 2026-02-03**: Integrated DockerSandbox into CodeEvolution system. Added DOCKER_AVAILABLE flag, updated CodeSandbox to use Docker with Python fallback, added use_docker param to both CodeEvolution and CodeValidator, implemented relaxed validation rules when Docker isolation is available. All 17 existing tests pass.
 
-- [ ] Add Docker sandbox tests in `tests/test_docker_sandbox.py`:
+- [x] Add Docker sandbox tests in `tests/test_docker_sandbox.py`:
   - Test basic code execution in container
   - Test memory limit enforcement (code trying to allocate >512MB should fail)
   - Test timeout enforcement (infinite loop should be killed after 30s)
   - Test no network access (requests to external URLs should fail)
   - Test cleanup (no orphan containers after test run)
   - Skip tests gracefully if Docker not available
+  - **Completed 2026-02-03**: Tests already implemented in `tests/test_docker_sandbox.py` with 4 test classes covering all requirements: `TestDockerSandboxBasic` (3 tests), `TestDockerSandboxExecution` (9 tests), `TestDockerSandboxDocker` (5 tests with Docker-specific isolation tests), `TestDockerSandboxFallback` (2 tests). All 14 tests pass, with 5 Docker-specific tests gracefully skipped when Docker unavailable.
 
 ---
 
