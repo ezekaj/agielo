@@ -417,7 +417,17 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - `TestEpisodicMemoryCleanup`: 12 tests for atexit cleanup functionality
   - All 56 tests pass successfully
 
-- [ ] Create `tests/test_concurrent_memory_access.py` - Test thread safety with multiple threads reading/writing episodes simultaneously. Verify no race conditions or data corruption.
+- [x] Create `tests/test_concurrent_memory_access.py` - Test thread safety with multiple threads reading/writing episodes simultaneously. Verify no race conditions or data corruption.
+  - **COMPLETED (2026-02-03)**: Created comprehensive concurrent memory access test suite with 14 tests in 6 test classes:
+    - `TestConcurrentReadAccess`: 3 tests for concurrent reads (no corruption, similarity queries, temporal range queries)
+    - `TestConcurrentWriteAccess`: 2 tests for concurrent writes (episode storage, index integrity)
+    - `TestMixedReadWriteAccess`: 2 tests for mixed read/write operations (concurrent access, statistics consistency)
+    - `TestBackgroundForgettingThreadSafety`: 2 tests for background forgetting thread (concurrent access, start/stop cycles)
+    - `TestDataIntegrityUnderStress`: 3 tests for stress testing (high volume writes, no duplicate IDs, valid episodes)
+    - `TestSaveLoadThreadSafety`: 2 tests for save/load operations (concurrent saves, session persistence)
+  - All tests verify thread safety of `_episodes_lock` protecting episode list access
+  - Tests use 5-20 concurrent threads to stress test the implementation
+  - All 14 tests pass, existing 56 episodic memory tests continue to pass
 
 - [ ] Create `tests/test_forgetting_workflow.py` - Test complete forgetting + spaced repetition workflow from episode creation through decay and review.
 
