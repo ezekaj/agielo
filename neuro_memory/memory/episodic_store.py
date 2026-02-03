@@ -142,6 +142,10 @@ class EpisodicMemoryStore:
         # In-memory episode storage (hot storage)
         self.episodes: List[Episode] = []
 
+        # Thread lock for episode access - prevents race conditions
+        # when background forgetting thread modifies episodes
+        self._episodes_lock = threading.RLock()
+
         # Temporal index: timestamp -> episode_ids
         self.temporal_index: Dict[str, List[str]] = {}
 
@@ -268,6 +272,11 @@ class EpisodicMemoryStore:
         1. Check retention levels
         2. Auto-reinforce high-importance memories (frequently accessed, highly linked)
         3. Remove memories that should be truly forgotten
+
+        Thread Safety:
+            Uses self._episodes_lock when reading and modifying the episodes list.
+            The lock is held during the entire modification operation to prevent
+            race conditions with other threads accessing or modifying episodes.
         """
         if not self.ebbinghaus:
             return
@@ -277,27 +286,48 @@ class EpisodicMemoryStore:
         # Get memories below retention threshold
         at_risk = self.ebbinghaus.get_memories_below_threshold(current_time=now)
 
-        for memory_id, retention in at_risk:
-            episode = self._get_episode_by_id(memory_id)
-            if episode is None:
-                continue
+        # Collect episodes to process - hold lock during entire operation
+        # to ensure consistency between reading and modifying
+        episodes_to_forget = []
+        episodes_to_reinforce = []
 
-            # Decide: reinforce or forget based on importance
-            should_reinforce = self._should_reinforce_memory(episode)
+        with self._episodes_lock:
+            for memory_id, retention in at_risk:
+                # Find episode in list (direct lookup, lock already held)
+                episode = None
+                for ep in self.episodes:
+                    if ep.episode_id == memory_id:
+                        episode = ep
+                        break
 
-            if should_reinforce:
-                # Auto-reinforce: record successful retrieval
-                self.ebbinghaus.record_retrieval(memory_id, success=True, current_time=now)
-                if self.spaced_repetition:
-                    self.spaced_repetition.record_review(memory_id, success=True, current_time=now)
-                self.reinforced_memories_count += 1
-            else:
-                # Mark as forgotten
-                self.forgotten_memories_count += 1
-                # Optionally remove from active storage (offload to disk)
-                if self.config.enable_disk_offload:
-                    self._offload_episode(episode)
-                    self.episodes = [ep for ep in self.episodes if ep.episode_id != memory_id]
+                if episode is None:
+                    continue
+
+                # Decide: reinforce or forget based on importance
+                should_reinforce = self._should_reinforce_memory(episode)
+
+                if should_reinforce:
+                    episodes_to_reinforce.append((memory_id, episode))
+                else:
+                    episodes_to_forget.append((memory_id, episode))
+
+            # Remove forgotten episodes from list while still holding lock
+            if episodes_to_forget:
+                forget_ids = {memory_id for memory_id, _ in episodes_to_forget}
+                self.episodes = [ep for ep in self.episodes if ep.episode_id not in forget_ids]
+
+        # Process reinforcements (outside lock - no list modification)
+        for memory_id, episode in episodes_to_reinforce:
+            self.ebbinghaus.record_retrieval(memory_id, success=True, current_time=now)
+            if self.spaced_repetition:
+                self.spaced_repetition.record_review(memory_id, success=True, current_time=now)
+            self.reinforced_memories_count += 1
+
+        # Offload forgotten episodes to disk (outside lock - I/O shouldn't hold lock)
+        for memory_id, episode in episodes_to_forget:
+            self.forgotten_memories_count += 1
+            if self.config.enable_disk_offload:
+                self._offload_episode(episode)
 
     def _should_reinforce_memory(self, episode: Episode) -> bool:
         """
@@ -447,10 +477,11 @@ class EpisodicMemoryStore:
         # Generate embedding if not provided
         if episode.embedding is None:
             episode.embedding = self._generate_embedding(content)
-        
-        # Add to in-memory storage
-        self.episodes.append(episode)
-        
+
+        # Add to in-memory storage (thread-safe)
+        with self._episodes_lock:
+            self.episodes.append(episode)
+
         # Update indices
         self._update_indices(episode)
         
@@ -474,8 +505,10 @@ class EpisodicMemoryStore:
             if self.spaced_repetition:
                 self.spaced_repetition.schedule_memory(episode.episode_id, current_time=ts)
 
-        # Check if consolidation/offloading needed
-        if len(self.episodes) >= self.config.offload_threshold:
+        # Check if consolidation/offloading needed (thread-safe read)
+        with self._episodes_lock:
+            episodes_count = len(self.episodes)
+        if episodes_count >= self.config.offload_threshold:
             self._consolidate_memory()
 
         return episode
@@ -626,20 +659,22 @@ class EpisodicMemoryStore:
     ) -> List[Episode]:
         """
         Retrieve episodes within a time range.
-        
+
         Args:
             start_time: Start of time window
             end_time: End of time window
-            
+
         Returns:
             Episodes in time range
         """
         matching_episodes = []
-        
-        for episode in self.episodes:
-            if start_time <= episode.timestamp <= end_time:
-                matching_episodes.append(episode)
-        
+
+        # Thread-safe iteration over episodes
+        with self._episodes_lock:
+            for episode in self.episodes:
+                if start_time <= episode.timestamp <= end_time:
+                    matching_episodes.append(episode)
+
         return matching_episodes
     
     def retrieve_by_location(self, location: str) -> List[Episode]:
@@ -655,15 +690,17 @@ class EpisodicMemoryStore:
         return [ep for ep in episodes if ep is not None]
     
     def _get_episode_by_id(self, episode_id: str) -> Optional[Episode]:
-        """Retrieve episode by ID."""
-        for episode in self.episodes:
-            if episode.episode_id == episode_id:
-                return episode
-        
-        # Check offloaded storage
+        """Retrieve episode by ID (thread-safe)."""
+        # Thread-safe search through episodes
+        with self._episodes_lock:
+            for episode in self.episodes:
+                if episode.episode_id == episode_id:
+                    return episode
+
+        # Check offloaded storage (outside lock - disk I/O shouldn't hold lock)
         if self.config.enable_disk_offload:
             return self._load_offloaded_episode(episode_id)
-        
+
         return None
     
     def _consolidate_memory(self):
@@ -675,18 +712,22 @@ class EpisodicMemoryStore:
             return
         
         # Decay importance of all episodes
-        for episode in self.episodes:
-            episode.importance *= self.config.importance_decay
-        
-        # Sort by importance
-        self.episodes.sort(key=lambda ep: ep.importance, reverse=True)
-        
-        # Offload bottom X% to disk
-        n_to_offload = len(self.episodes) - self.config.max_episodes
+        # Thread-safe consolidation
+        with self._episodes_lock:
+            for episode in self.episodes:
+                episode.importance *= self.config.importance_decay
+
+            # Sort by importance
+            self.episodes.sort(key=lambda ep: ep.importance, reverse=True)
+
+            # Offload bottom X% to disk
+            n_to_offload = len(self.episodes) - self.config.max_episodes
+            if n_to_offload > 0:
+                episodes_to_offload = self.episodes[-n_to_offload:]
+                self.episodes = self.episodes[:-n_to_offload]
+
+        # Offload outside lock to avoid holding lock during I/O
         if n_to_offload > 0:
-            episodes_to_offload = self.episodes[-n_to_offload:]
-            self.episodes = self.episodes[:-n_to_offload]
-            
             for episode in episodes_to_offload:
                 self._offload_episode(episode)
                 self.episodes_offloaded += 1
@@ -716,13 +757,17 @@ class EpisodicMemoryStore:
         return None
     
     def save_state(self):
-        """Save memory state to disk."""
+        """Save memory state to disk (thread-safe)."""
         if not self.persistence_path:
             return
 
+        # Thread-safe read of episodes for serialization
+        with self._episodes_lock:
+            episodes_data = [ep.to_dict() for ep in self.episodes]
+
         state = {
             "config": self.config.__dict__,
-            "episodes": [ep.to_dict() for ep in self.episodes],
+            "episodes": episodes_data,
             "temporal_index": self.temporal_index,
             "spatial_index": self.spatial_index,
             "entity_index": self.entity_index,
@@ -749,10 +794,11 @@ class EpisodicMemoryStore:
         
         with open(state_file, 'r') as f:
             state = json.load(f)
-        
-        # Restore episodes
-        self.episodes = [Episode.from_dict(ep_dict) for ep_dict in state["episodes"]]
-        
+
+        # Restore episodes (thread-safe)
+        with self._episodes_lock:
+            self.episodes = [Episode.from_dict(ep_dict) for ep_dict in state["episodes"]]
+
         # Restore indices
         self.temporal_index = state["temporal_index"]
         self.spatial_index = state["spatial_index"]
@@ -768,15 +814,20 @@ class EpisodicMemoryStore:
         self.reinforced_memories_count = state.get("reinforced_memories_count", 0)
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get memory statistics including forgetting system stats."""
+        """Get memory statistics including forgetting system stats (thread-safe)."""
+        # Thread-safe read of episodes for statistics
+        with self._episodes_lock:
+            episodes_count = len(self.episodes)
+            mean_importance = np.mean([ep.importance for ep in self.episodes]) if self.episodes else 0.0
+
         stats = {
             "total_episodes": self.total_episodes_stored,
-            "episodes_in_memory": len(self.episodes),
+            "episodes_in_memory": episodes_count,
             "episodes_offloaded": self.episodes_offloaded,
             "unique_locations": len(self.spatial_index),
             "unique_entities": len(self.entity_index),
             "temporal_span_days": len(self.temporal_index),
-            "mean_importance": np.mean([ep.importance for ep in self.episodes]) if self.episodes else 0.0,
+            "mean_importance": mean_importance,
             # Ebbinghaus forgetting stats
             "forgotten_memories": self.forgotten_memories_count,
             "reviewed_memories": self.reviewed_memories_count,

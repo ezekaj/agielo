@@ -87,9 +87,26 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
 ## Phase 7B: Thread Safety & High Priority Fixes
 
 ### 7B.1 - Fix Thread Safety in EpisodicMemoryStore
-- [ ] Add `self._episodes_lock = threading.RLock()` to `neuro_memory/memory/episodic_store.py` in `__init__`. Wrap ALL access to `self.episodes` in lock acquisition: lines 254-300 (forgetting loop), line 300 (episode removal), and all other read/write operations on the episodes list.
+- [x] Add `self._episodes_lock = threading.RLock()` to `neuro_memory/memory/episodic_store.py` in `__init__`. Wrap ALL access to `self.episodes` in lock acquisition: lines 254-300 (forgetting loop), line 300 (episode removal), and all other read/write operations on the episodes list.
+  - **COMPLETED (2026-02-03)**: All episode list accesses now protected with `self._episodes_lock`:
+    - Line 147: Lock initialized as `threading.RLock()` in `__init__`
+    - Line 458-459: `store_episode()` - episode append protected
+    - Lines 485-488: `store_episode()` - offload check uses lock for count
+    - Lines 649-651: `retrieve_by_temporal_range()` - iteration protected
+    - Lines 668-672: `_get_episode_by_id()` - search protected
+    - Lines 686-700: `_consolidate_memory()` - full modification protected
+    - Lines 735-736: `save_state()` - serialization protected
+    - Lines 768-769: `load_state()` - restoration protected
+    - Lines 788-791: `get_statistics()` - reading protected
+  - All 15 episodic memory tests pass
 
-- [ ] Fix `_forgetting_loop` method (lines 280-301) to use lock when modifying episodes list. Ensure the lock is held during the entire list modification operation to prevent race conditions.
+- [x] Fix `_forgetting_loop` method (lines 280-301) to use lock when modifying episodes list. Ensure the lock is held during the entire list modification operation to prevent race conditions.
+  - **COMPLETED (2026-02-03)**: Refactored `_process_forgetting()` method to hold lock during entire episode modification:
+    - Lines 294-316: Lock held during complete scan of at-risk memories
+    - Lines 318-320: Episode removal happens atomically while lock is held
+    - Lines 322-330: Reinforcement processing happens outside lock (no list modification)
+    - Lines 332-336: Disk offloading happens outside lock (I/O shouldn't hold lock)
+  - Added comprehensive docstring explaining thread safety contract
 
 ### 7B.2 - Fix Test Functions Pattern
 - [ ] Fix `tests/test_search.py` - Replace all `return True/False` statements with proper `assert` statements. All 4 test functions (`test_semantic_embeddings`, `test_search_ranking`, `test_memory_search`, `test_concurrent_search`) should use assertions instead of return values.
