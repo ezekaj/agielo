@@ -24,7 +24,10 @@ from neuro_memory.memory.forgetting import (
     EbbinghausConfig,
     MemoryState,
     ForgettingEngine,
-    ForgettingConfig
+    ForgettingConfig,
+    SpacedRepetitionScheduler,
+    SpacedRepetitionConfig,
+    ReviewItem
 )
 
 
@@ -547,6 +550,506 @@ class TestIntegrationWithExistingForgettingEngine:
         assert old_activation < 1.0  # Decay happened
         assert new_retention < 1.0   # Decay happened
         assert new_retention == pytest.approx(0.368, abs=0.01)
+
+
+class TestSpacedRepetitionConfig:
+    """Tests for SpacedRepetitionConfig."""
+
+    def test_default_config(self):
+        """Test default configuration values."""
+        config = SpacedRepetitionConfig()
+
+        assert len(config.base_intervals) == 6
+        assert config.base_intervals[0] == 24.0  # 1 day
+        assert config.base_intervals[1] == 72.0  # 3 days
+        assert config.base_intervals[2] == 168.0  # 7 days
+        assert config.base_intervals[3] == 336.0  # 14 days
+        assert config.base_intervals[4] == 720.0  # 30 days
+        assert config.base_intervals[5] == 2160.0  # 90 days
+        assert config.immediate_review_delay == 0.25  # 15 minutes
+        assert config.stability_weight == 1.0
+
+    def test_custom_config(self):
+        """Test custom configuration."""
+        config = SpacedRepetitionConfig(
+            base_intervals=[12.0, 24.0, 48.0],
+            immediate_review_delay=0.5,
+            stability_weight=2.0
+        )
+
+        assert len(config.base_intervals) == 3
+        assert config.immediate_review_delay == 0.5
+        assert config.stability_weight == 2.0
+
+
+class TestReviewItem:
+    """Tests for ReviewItem dataclass."""
+
+    def test_review_item_creation(self):
+        """Test creating a ReviewItem."""
+        item = ReviewItem(
+            memory_id="test_123",
+            next_review=1700000000.0,
+            stability=2.5,
+            retention=0.8,
+            interval_level=2,
+            is_immediate=False
+        )
+
+        assert item.memory_id == "test_123"
+        assert item.next_review == 1700000000.0
+        assert item.stability == 2.5
+        assert item.retention == 0.8
+        assert item.interval_level == 2
+        assert item.is_immediate is False
+
+    def test_review_item_to_dict(self):
+        """Test serialization to dict."""
+        item = ReviewItem(
+            memory_id="test_123",
+            next_review=1700000000.0,
+            stability=2.5,
+            retention=0.8,
+            interval_level=2,
+            is_immediate=True
+        )
+
+        data = item.to_dict()
+
+        assert data["memory_id"] == "test_123"
+        assert data["next_review"] == 1700000000.0
+        assert data["stability"] == 2.5
+        assert data["retention"] == 0.8
+        assert data["interval_level"] == 2
+        assert data["is_immediate"] is True
+
+    def test_review_item_from_dict(self):
+        """Test deserialization from dict."""
+        data = {
+            "memory_id": "restored_review",
+            "next_review": 1700000000.0,
+            "stability": 3.0,
+            "retention": 0.7,
+            "interval_level": 3,
+            "is_immediate": False
+        }
+
+        item = ReviewItem.from_dict(data)
+
+        assert item.memory_id == "restored_review"
+        assert item.next_review == 1700000000.0
+        assert item.stability == 3.0
+        assert item.retention == 0.7
+        assert item.interval_level == 3
+        assert item.is_immediate is False
+
+
+class TestSpacedRepetitionScheduler:
+    """Tests for SpacedRepetitionScheduler class."""
+
+    def test_initialization_default(self):
+        """Test initialization with default config."""
+        scheduler = SpacedRepetitionScheduler()
+
+        assert scheduler.ebbinghaus is not None
+        assert scheduler.config is not None
+        assert scheduler._review_schedule == {}
+        assert scheduler._review_history == []
+
+    def test_initialization_with_ebbinghaus(self):
+        """Test initialization with existing EbbinghausForgetting instance."""
+        ebbinghaus = EbbinghausForgetting()
+        ebbinghaus.register_memory("existing_mem")
+
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus)
+
+        assert scheduler.ebbinghaus is ebbinghaus
+        assert scheduler.ebbinghaus.get_memory_state("existing_mem") is not None
+
+    def test_schedule_memory_creates_review(self):
+        """Test scheduling a new memory creates a review item."""
+        scheduler = SpacedRepetitionScheduler()
+        now = datetime.now().timestamp()
+
+        item = scheduler.schedule_memory("mem_1", current_time=now)
+
+        assert item.memory_id == "mem_1"
+        assert item.interval_level == 0
+        assert item.is_immediate is False
+        assert item.next_review > now  # Scheduled in the future
+        assert "mem_1" in scheduler._review_schedule
+
+    def test_schedule_memory_uses_base_interval(self):
+        """Test scheduling uses the first base interval scaled by stability."""
+        config = SpacedRepetitionConfig(base_intervals=[24.0])  # 1 day
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        item = scheduler.schedule_memory("mem_1", current_time=now)
+
+        # next_review = now + stability(1.0) * base_interval(24h) * weight(1.0) * 3600
+        expected_next = now + 1.0 * 24.0 * 1.0 * 3600
+        assert item.next_review == pytest.approx(expected_next)
+
+
+class TestRecordReview:
+    """Tests for record_review method."""
+
+    def test_successful_review_increases_interval_level(self):
+        """Test successful review advances interval level."""
+        scheduler = SpacedRepetitionScheduler()
+        now = datetime.now().timestamp()
+
+        scheduler.schedule_memory("mem_1", current_time=now)
+        assert scheduler.get_review_item("mem_1").interval_level == 0
+
+        scheduler.record_review("mem_1", success=True, current_time=now)
+        assert scheduler.get_review_item("mem_1").interval_level == 1
+
+        scheduler.record_review("mem_1", success=True, current_time=now)
+        assert scheduler.get_review_item("mem_1").interval_level == 2
+
+    def test_successful_review_uses_higher_interval(self):
+        """Test successful reviews schedule using progressively higher intervals."""
+        config = SpacedRepetitionConfig(base_intervals=[24.0, 72.0, 168.0])
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        scheduler.schedule_memory("mem_1", current_time=now)
+
+        # After first success, should use interval[1] = 72h
+        scheduler.record_review("mem_1", success=True, current_time=now)
+        item = scheduler.get_review_item("mem_1")
+
+        # Stability is now 1.5 (after first successful retrieval)
+        stability = scheduler.ebbinghaus.get_memory_state("mem_1").stability_score
+        expected_next = now + stability * 72.0 * 3600
+        assert item.next_review == pytest.approx(expected_next, rel=0.01)
+
+    def test_failed_review_schedules_immediate(self):
+        """Test failed review schedules immediate review."""
+        config = SpacedRepetitionConfig(immediate_review_delay=0.25)  # 15 min
+        scheduler = SpacedRepetitionScheduler(config=config)
+
+        now = 1000000.0
+        scheduler.schedule_memory("mem_1", current_time=now)
+
+        # Build up some interval level
+        scheduler.record_review("mem_1", success=True, current_time=now)
+        scheduler.record_review("mem_1", success=True, current_time=now)
+        assert scheduler.get_review_item("mem_1").interval_level == 2
+
+        # Fail - should reset and schedule immediate review
+        scheduler.record_review("mem_1", success=False, current_time=now)
+
+        item = scheduler.get_review_item("mem_1")
+        assert item.interval_level == 0  # Reset to 0
+        assert item.is_immediate is True
+        # Should be scheduled 15 min from now
+        expected_next = now + 0.25 * 3600
+        assert item.next_review == pytest.approx(expected_next)
+
+    def test_failed_review_resets_stability(self):
+        """Test failed review resets stability in ebbinghaus."""
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(min_stability=0.5))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus)
+
+        scheduler.schedule_memory("mem_1")
+
+        # Build up stability
+        for _ in range(3):
+            scheduler.record_review("mem_1", success=True)
+
+        stability_before = scheduler.ebbinghaus.get_memory_state("mem_1").stability_score
+        assert stability_before > 1.0
+
+        # Fail - stability should reset
+        scheduler.record_review("mem_1", success=False)
+
+        stability_after = scheduler.ebbinghaus.get_memory_state("mem_1").stability_score
+        assert stability_after == 0.5  # min_stability
+
+    def test_review_records_history(self):
+        """Test that reviews are recorded in history."""
+        scheduler = SpacedRepetitionScheduler()
+
+        scheduler.schedule_memory("mem_1")
+        scheduler.record_review("mem_1", success=True)
+        scheduler.record_review("mem_1", success=False)
+
+        assert len(scheduler._review_history) == 2
+        assert scheduler._review_history[0]["success"] is True
+        assert scheduler._review_history[1]["success"] is False
+
+    def test_interval_level_capped_at_max(self):
+        """Test interval level doesn't exceed max intervals."""
+        config = SpacedRepetitionConfig(base_intervals=[24.0, 72.0, 168.0])  # 3 levels
+        scheduler = SpacedRepetitionScheduler(config=config)
+
+        scheduler.schedule_memory("mem_1")
+
+        # Do 10 successful reviews
+        for _ in range(10):
+            scheduler.record_review("mem_1", success=True)
+
+        # Should be capped at level 2 (index of last interval)
+        assert scheduler.get_review_item("mem_1").interval_level == 2
+
+
+class TestGetDueForReview:
+    """Tests for get_due_for_review method."""
+
+    def test_no_due_items_initially(self):
+        """Test no items are due when just scheduled."""
+        scheduler = SpacedRepetitionScheduler()
+        now = datetime.now().timestamp()
+
+        scheduler.schedule_memory("mem_1", current_time=now)
+        scheduler.schedule_memory("mem_2", current_time=now)
+
+        # Nothing should be due immediately
+        due = scheduler.get_due_for_review(current_time=now)
+        assert len(due) == 0
+
+    def test_overdue_items_returned(self):
+        """Test overdue items are returned."""
+        config = SpacedRepetitionConfig(base_intervals=[1.0])  # 1 hour
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        scheduler.schedule_memory("mem_1", current_time=now)
+
+        # 2 hours later, should be due
+        later = now + 2 * 3600
+        due = scheduler.get_due_for_review(current_time=later)
+
+        assert len(due) == 1
+        assert "mem_1" in due
+
+    def test_respects_limit(self):
+        """Test get_due_for_review respects limit parameter."""
+        config = SpacedRepetitionConfig(base_intervals=[1.0])  # 1 hour
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        for i in range(10):
+            scheduler.schedule_memory(f"mem_{i}", current_time=now)
+
+        # 2 hours later, all should be due
+        later = now + 2 * 3600
+        due = scheduler.get_due_for_review(limit=5, current_time=later)
+
+        assert len(due) == 5
+
+    def test_sorted_by_most_overdue(self):
+        """Test results are sorted by most overdue first."""
+        config = SpacedRepetitionConfig(base_intervals=[1.0])
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        # Schedule at different times (older = more overdue later)
+        scheduler.schedule_memory("recent", current_time=now)
+        scheduler.schedule_memory("older", current_time=now - 3600)  # 1 hour earlier
+        scheduler.schedule_memory("oldest", current_time=now - 7200)  # 2 hours earlier
+
+        # 2 hours after 'now'
+        later = now + 2 * 3600
+        due = scheduler.get_due_for_review(limit=10, current_time=later)
+
+        # oldest should be first (most overdue)
+        assert due[0] == "oldest"
+        assert due[1] == "older"
+        assert due[2] == "recent"
+
+
+class TestUpcomingReviews:
+    """Tests for get_upcoming_reviews method."""
+
+    def test_upcoming_reviews_empty_initially(self):
+        """Test upcoming reviews when none scheduled."""
+        scheduler = SpacedRepetitionScheduler()
+
+        upcoming = scheduler.get_upcoming_reviews(hours_ahead=24.0)
+
+        assert len(upcoming) == 0
+
+    def test_returns_upcoming_within_window(self):
+        """Test returns only reviews within the specified window."""
+        config = SpacedRepetitionConfig(base_intervals=[12.0, 48.0])  # 12h, 48h
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        scheduler.schedule_memory("soon", current_time=now)  # Due in 12h
+
+        # 48h window should include it
+        upcoming = scheduler.get_upcoming_reviews(hours_ahead=24.0, current_time=now)
+        assert len(upcoming) == 1
+        assert upcoming[0][0] == "soon"
+
+    def test_excludes_already_due(self):
+        """Test excludes items that are already due (past)."""
+        config = SpacedRepetitionConfig(base_intervals=[1.0])  # 1 hour
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        scheduler.schedule_memory("past_due", current_time=now)
+
+        # 2 hours later, item is due, not upcoming
+        later = now + 2 * 3600
+        upcoming = scheduler.get_upcoming_reviews(hours_ahead=24.0, current_time=later)
+
+        assert len(upcoming) == 0
+
+    def test_sorted_by_soonest_first(self):
+        """Test upcoming reviews sorted by soonest first."""
+        config = SpacedRepetitionConfig(base_intervals=[12.0])
+        ebbinghaus = EbbinghausForgetting(config=EbbinghausConfig(base_stability=1.0))
+        scheduler = SpacedRepetitionScheduler(ebbinghaus=ebbinghaus, config=config)
+
+        now = 1000000.0
+        # Schedule at different times
+        scheduler.schedule_memory("later", current_time=now)  # Due in 12h
+        scheduler.schedule_memory("sooner", current_time=now - 3600)  # Due in 11h
+
+        upcoming = scheduler.get_upcoming_reviews(hours_ahead=24.0, current_time=now)
+
+        assert upcoming[0][0] == "sooner"
+        assert upcoming[1][0] == "later"
+
+
+class TestSchedulerStatistics:
+    """Tests for get_statistics method."""
+
+    def test_statistics_empty(self):
+        """Test statistics with no scheduled reviews."""
+        scheduler = SpacedRepetitionScheduler()
+
+        stats = scheduler.get_statistics()
+
+        assert stats["total_scheduled"] == 0
+        assert stats["due_now"] == 0
+        assert stats["review_history_count"] == 0
+        assert stats["success_rate"] == 0.0
+
+    def test_statistics_with_data(self):
+        """Test statistics with scheduled reviews and history."""
+        scheduler = SpacedRepetitionScheduler()
+
+        # Schedule some memories
+        for i in range(5):
+            scheduler.schedule_memory(f"mem_{i}")
+
+        # Do some reviews
+        scheduler.record_review("mem_0", success=True)
+        scheduler.record_review("mem_1", success=True)
+        scheduler.record_review("mem_2", success=False)
+
+        stats = scheduler.get_statistics()
+
+        assert stats["total_scheduled"] == 5
+        assert stats["review_history_count"] == 3
+        # 2 successes out of 3
+        assert stats["success_rate"] == pytest.approx(2/3)
+
+    def test_interval_level_distribution(self):
+        """Test interval level distribution in statistics."""
+        scheduler = SpacedRepetitionScheduler()
+
+        scheduler.schedule_memory("mem_0")
+        scheduler.schedule_memory("mem_1")
+        scheduler.record_review("mem_1", success=True)  # Level 1
+        scheduler.schedule_memory("mem_2")
+        scheduler.record_review("mem_2", success=True)  # Level 1
+        scheduler.record_review("mem_2", success=True)  # Level 2
+
+        stats = scheduler.get_statistics()
+
+        assert stats["interval_level_distribution"][0] == 1  # mem_0
+        assert stats["interval_level_distribution"][1] == 1  # mem_1
+        assert stats["interval_level_distribution"][2] == 1  # mem_2
+
+
+class TestSchedulerPersistence:
+    """Tests for scheduler state persistence."""
+
+    def test_save_and_load_schedule(self):
+        """Test saving and loading schedule to file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / "scheduler_state.json"
+            ebbinghaus_path = Path(tmpdir) / "ebbinghaus_state.json"
+
+            # Create and populate
+            ebbinghaus1 = EbbinghausForgetting(state_path=ebbinghaus_path)
+            scheduler1 = SpacedRepetitionScheduler(
+                ebbinghaus=ebbinghaus1,
+                state_path=state_path
+            )
+            scheduler1.schedule_memory("mem_1")
+            scheduler1.record_review("mem_1", success=True)
+
+            # State should be saved
+            assert state_path.exists()
+
+            # Load in new instance
+            ebbinghaus2 = EbbinghausForgetting(state_path=ebbinghaus_path)
+            scheduler2 = SpacedRepetitionScheduler(
+                ebbinghaus=ebbinghaus2,
+                state_path=state_path
+            )
+
+            assert len(scheduler2._review_schedule) == 1
+            assert scheduler2.get_review_item("mem_1") is not None
+            assert scheduler2.get_review_item("mem_1").interval_level == 1
+
+    def test_persistence_preserves_history(self):
+        """Test that review history is preserved across loads."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / "state.json"
+
+            # Create with history
+            scheduler1 = SpacedRepetitionScheduler(state_path=state_path)
+            scheduler1.schedule_memory("mem_1")
+            for _ in range(5):
+                scheduler1.record_review("mem_1", success=True)
+
+            original_history_len = len(scheduler1._review_history)
+
+            # Load in new instance
+            scheduler2 = SpacedRepetitionScheduler(state_path=state_path)
+            loaded_history_len = len(scheduler2._review_history)
+
+            assert loaded_history_len == original_history_len
+
+
+class TestRemoveMemory:
+    """Tests for remove_memory method."""
+
+    def test_remove_existing_memory(self):
+        """Test removing an existing memory from schedule."""
+        scheduler = SpacedRepetitionScheduler()
+
+        scheduler.schedule_memory("mem_1")
+        assert "mem_1" in scheduler._review_schedule
+
+        result = scheduler.remove_memory("mem_1")
+
+        assert result is True
+        assert "mem_1" not in scheduler._review_schedule
+
+    def test_remove_nonexistent_memory(self):
+        """Test removing non-existent memory returns False."""
+        scheduler = SpacedRepetitionScheduler()
+
+        result = scheduler.remove_memory("nonexistent")
+
+        assert result is False
 
 
 if __name__ == "__main__":

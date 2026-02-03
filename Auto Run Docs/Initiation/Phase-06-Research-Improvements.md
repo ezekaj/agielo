@@ -189,12 +189,13 @@ Ebbinghaus-style forgetting with spaced repetition for better memory.
   - `should_forget(memory_id, threshold=0.3) -> bool`
   - **Completed 2026-02-03**: Created `EbbinghausForgetting` class with full implementation. Includes `MemoryState` dataclass tracking memory_id, created_at, last_access, access_count, stability_score, initial_retention. `EbbinghausConfig` for configurable parameters (base_stability, stability_multiplier, forget_threshold, min/max_stability). Core methods: `register_memory()`, `compute_retention()` with exact R=e^(-t/S) formula, `should_forget()` with configurable threshold, `record_retrieval()` for spaced repetition (stability increases on success, resets on failure), `get_all_retentions()`, `get_memories_below_threshold()`, `get_statistics()`. State persistence via JSON. All 32 tests pass in `tests/test_ebbinghaus_forgetting.py`.
 
-- [ ] Add spaced repetition scheduling in `neuro_memory/memory/forgetting.py`:
+- [x] Add spaced repetition scheduling in `neuro_memory/memory/forgetting.py`:
   - `SpacedRepetitionScheduler` class
   - After successful retrieval: next_review = now + stability * base_interval
   - Base intervals: 1 day, 3 days, 7 days, 14 days, 30 days, 90 days
   - Failed retrieval: reset stability, schedule immediate review
   - `get_due_for_review(limit=10) -> List[memory_id]`: memories needing reinforcement
+  - **Completed 2026-02-03**: Implemented `SpacedRepetitionScheduler` class with full functionality. Includes `SpacedRepetitionConfig` (base_intervals: [24h, 72h, 168h, 336h, 720h, 2160h], immediate_review_delay: 15min, stability_weight), `ReviewItem` dataclass tracking memory_id, next_review, stability, retention, interval_level, is_immediate. Core methods: `schedule_memory()` for initial scheduling, `record_review(success)` advancing interval levels on success or scheduling immediate review on failure, `get_due_for_review(limit=10)` returning overdue memory IDs sorted by urgency, `get_upcoming_reviews(hours_ahead)` for planning, `get_statistics()` for review metrics. State persistence via JSON. Added 30 new tests in 10 test classes covering all functionality. All 62 Ebbinghaus/SpacedRepetition tests pass.
 
 - [ ] Integrate improved forgetting into memory system:
   - Update `EpisodicStore` to use new `EbbinghausForgetting`
