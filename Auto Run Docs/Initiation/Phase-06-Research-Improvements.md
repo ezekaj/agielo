@@ -150,7 +150,7 @@ Multiple verification methods that must agree before deploying code changes.
 
 Random Network Distillation for smarter exploration of what to learn.
 
-- [ ] Create RND curiosity module in `integrations/rnd_curiosity.py`:
+- [x] Create RND curiosity module in `integrations/rnd_curiosity.py`:
   - Create `RNDCuriosity` class
   - `target_network`: fixed random neural network (input: embedding, output: vector)
   - `predictor_network`: trained to match target (same architecture)
@@ -158,6 +158,7 @@ Random Network Distillation for smarter exploration of what to learn.
   - High curiosity = predictor can't match target = novel/unknown area
   - `update_predictor(embedding)`: train predictor on seen embeddings
   - Use numpy for networks (simple 2-layer MLP, 128 hidden units)
+  - **Completed 2026-02-03**: Created `integrations/rnd_curiosity.py` with full `RNDCuriosity` class implementing Random Network Distillation. Includes `SimpleMLPNetwork` class (2-layer MLP with Xavier init, forward/backward passes), target network (fixed seed=42 for reproducibility), predictor network (trained via SGD), `compute_curiosity()` with running mean/var normalization and sigmoid scaling, `update_predictor()` with configurable gradient steps, `record_curiosity()` for combined measurement and learning, `get_curiosity_map()` for topic-based curiosity using SemanticEmbedder, `get_exploration_stats()` for comprehensive statistics. State persistence via JSON. All 28 tests pass in `tests/test_rnd_curiosity.py`.
 
 - [ ] Integrate RND into active learning in `integrations/active_learning.py`:
   - Import `RNDCuriosity` from `rnd_curiosity.py`
