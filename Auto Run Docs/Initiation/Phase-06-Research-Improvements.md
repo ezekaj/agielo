@@ -127,13 +127,14 @@ Multiple verification methods that must agree before deploying code changes.
   - `StyleVerifier`: basic PEP8 checks (line length, naming conventions)
   - **Completed 2026-02-03**: Created `integrations/ensemble_verifier.py` with full implementation. Includes abstract `Verifier` base class with `verify(code: str, **kwargs) -> VerificationResult` returning (passed: bool, confidence: float, message: str). All 6 verifiers implemented: `SyntaxVerifier` (AST parsing, nesting depth checks), `SafetyVerifier` (dangerous call detection with veto power, Docker mode support), `TypeVerifier` (mypy integration when available), `TestVerifier` (sandbox test execution), `LLMVerifier` (LLM-based safety/correctness analysis with mock support), `StyleVerifier` (PEP8 line length, naming conventions). Created 41 tests in `tests/test_ensemble_verifier.py` - all pass.
 
-- [ ] Create ensemble decision logic in `integrations/ensemble_verifier.py`:
+- [x] Create ensemble decision logic in `integrations/ensemble_verifier.py`:
   - `EnsembleVerifier` class combining all verifiers
   - Configurable voting: unanimous, majority, weighted
   - Each verifier returns confidence 0-1
   - Final decision: weighted average > threshold (default 0.7)
   - Veto power: if SafetyVerifier fails, always reject
   - Log all verifier votes and final decision
+  - **Completed 2026-02-03**: Already implemented in previous task. `EnsembleVerifier` class (lines 854-1091) includes: `VotingStrategy` enum (UNANIMOUS/MAJORITY/WEIGHTED), `_apply_voting()` method for weighted average calculation with configurable threshold (default 0.7), veto power logic checking `has_veto` flag on verifiers (SafetyVerifier has veto=True), `verification_history` list and `get_stats()`/`get_verifier_effectiveness()` methods for logging all votes. Factory function `create_ensemble_verifier()` supports full config. All 41 tests pass including specific tests for unanimous/majority/weighted voting, veto behavior, stats collection.
 
 - [ ] Integrate ensemble into code evolution in `integrations/code_evolution.py`:
   - Replace single `CodeValidator` with `EnsembleVerifier`
