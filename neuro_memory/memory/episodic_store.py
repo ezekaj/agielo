@@ -64,7 +64,7 @@ from config.constants import (
 _episodic_memory_instances: List[weakref.ref] = []
 
 
-def _cleanup_all_instances():
+def _cleanup_all_instances() -> None:
     """Cleanup function called at program exit to save all EpisodicMemoryStore state."""
     for ref in _episodic_memory_instances:
         instance = ref()
@@ -76,7 +76,7 @@ def _cleanup_all_instances():
 atexit.register(_cleanup_all_instances)
 
 
-def _register_instance(instance: 'EpisodicMemoryStore'):
+def _register_instance(instance: 'EpisodicMemoryStore') -> None:
     """Register an EpisodicMemoryStore instance for cleanup on exit."""
     _episodic_memory_instances.append(weakref.ref(instance))
 
@@ -111,7 +111,7 @@ class Episode:
         if self.episode_id is None:
             self.episode_id = f"ep_{self.timestamp.timestamp()}_{id(self)}"
     
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> Dict[str, Any]:
         """Convert episode to dictionary for serialization."""
         return {
             "episode_id": self.episode_id,
@@ -126,7 +126,7 @@ class Episode:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict) -> 'Episode':
+    def from_dict(cls, data: Dict[str, Any]) -> 'Episode':
         """Reconstruct episode from dictionary."""
         # Keep string content as string, only convert arrays
         content = data["content"]
@@ -174,7 +174,7 @@ class EpisodicMemoryStore:
     - Automatic capacity management
     """
     
-    def __init__(self, config: Optional[EpisodicMemoryConfig] = None):
+    def __init__(self, config: Optional[EpisodicMemoryConfig] = None) -> None:
         """
         Args:
             config: Memory configuration
@@ -226,7 +226,7 @@ class EpisodicMemoryStore:
         # Register for cleanup on program exit
         _register_instance(self)
 
-    def _initialize_vector_db(self):
+    def _initialize_vector_db(self) -> None:
         """Initialize vector database for similarity search."""
         backend = self.config.vector_db_backend
 
@@ -266,7 +266,7 @@ class EpisodicMemoryStore:
                 f"Supported backends: 'chromadb'. FAISS support planned for future release."
             )
 
-    def _initialize_ebbinghaus(self):
+    def _initialize_ebbinghaus(self) -> None:
         """Initialize Ebbinghaus forgetting and spaced repetition systems."""
         if not self.config.persistence_path:
             # In-memory only
@@ -290,7 +290,7 @@ class EpisodicMemoryStore:
                 state_path=sr_path
             )
 
-    def start_forgetting_background_task(self):
+    def start_forgetting_background_task(self) -> None:
         """
         Start background task to process forgetting every hour.
 
@@ -310,13 +310,13 @@ class EpisodicMemoryStore:
         )
         self._forgetting_thread.start()
 
-    def stop_forgetting_background_task(self):
+    def stop_forgetting_background_task(self) -> None:
         """Stop the background forgetting task."""
         self._forgetting_running = False
         if self._forgetting_thread and self._forgetting_thread.is_alive():
             self._forgetting_thread.join(timeout=FORGETTING_THREAD_TIMEOUT_SECONDS)
 
-    def _forgetting_loop(self):
+    def _forgetting_loop(self) -> None:
         """Background loop for forgetting processing."""
         while self._forgetting_running:
             try:
@@ -327,7 +327,7 @@ class EpisodicMemoryStore:
             # Sleep for the configured interval
             time.sleep(self.config.forgetting_background_interval)
 
-    def _process_forgetting(self):
+    def _process_forgetting(self) -> None:
         """
         Process memories for forgetting:
         1. Check retention levels
@@ -431,7 +431,7 @@ class EpisodicMemoryStore:
 
         return False
 
-    def record_retrieval(self, episode_id: str, success: bool = True):
+    def record_retrieval(self, episode_id: str, success: bool = True) -> None:
         """
         Record a memory retrieval for spaced repetition.
 
@@ -717,7 +717,7 @@ class EpisodicMemoryStore:
 
         return embedding
     
-    def _update_indices(self, episode: Episode):
+    def _update_indices(self, episode: Episode) -> None:
         """Update all indices with new episode."""
         # Temporal index (by date)
         date_key = episode.timestamp.strftime("%Y-%m-%d")
@@ -737,7 +737,7 @@ class EpisodicMemoryStore:
                 self.entity_index[entity] = []
             self.entity_index[entity].append(episode.episode_id)
 
-    def _remove_from_indices(self, episode: Episode):
+    def _remove_from_indices(self, episode: Episode) -> None:
         """
         Remove episode from all indices to prevent memory leaks.
 
@@ -778,7 +778,7 @@ class EpisodicMemoryStore:
                 except ValueError:
                     pass  # Episode ID not in list
 
-    def _remove_from_vector_db(self, episode_ids: List[str]):
+    def _remove_from_vector_db(self, episode_ids: List[str]) -> None:
         """
         Remove episodes from vector database.
 
@@ -795,7 +795,7 @@ class EpisodicMemoryStore:
                 # Log but don't fail - episode may already be removed
                 print(f"[EpisodicMemoryStore] Warning: Failed to delete from ChromaDB: {e}")
     
-    def _add_to_vector_db(self, episode: Episode):
+    def _add_to_vector_db(self, episode: Episode) -> None:
         """Add episode to vector database for similarity search."""
         if self.config.vector_db_backend == "chromadb":
             self.collection.add(
@@ -923,7 +923,7 @@ class EpisodicMemoryStore:
 
         return None
     
-    def _consolidate_memory(self):
+    def _consolidate_memory(self) -> None:
         """
         Consolidate memory by offloading low-importance episodes to disk.
         Mimics hippocampal consolidation: important memories stay, others archived.
@@ -974,7 +974,7 @@ class EpisodicMemoryStore:
             # This helps reclaim memory from the removed episodes and index entries
             gc.collect()
     
-    def _offload_episode(self, episode: Episode):
+    def _offload_episode(self, episode: Episode) -> None:
         """Offload episode to disk storage."""
         if not self.persistence_path:
             return
@@ -998,7 +998,7 @@ class EpisodicMemoryStore:
         
         return None
     
-    def save_state(self):
+    def save_state(self) -> None:
         """Save memory state to disk (thread-safe)."""
         if not self.persistence_path:
             return
@@ -1025,7 +1025,7 @@ class EpisodicMemoryStore:
         with open(state_file, 'w') as f:
             json.dump(state, f, indent=2)
     
-    def load_state(self):
+    def load_state(self) -> None:
         """Load memory state from disk."""
         if not self.persistence_path:
             return
@@ -1091,7 +1091,7 @@ class EpisodicMemoryStore:
 
         return stats
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Cleanup resources and save state on exit.
 

@@ -381,7 +381,14 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - Note: `set_llm_interface()` method does not exist in this file - task description was outdated
   - All 32 active_learning_rnd tests pass
 
-- [ ] Add type hints to all public functions in `neuro_memory/memory/episodic_store.py`.
+- [x] Add type hints to all public functions in `neuro_memory/memory/episodic_store.py`.
+  - **COMPLETED (2026-02-03)**: Added comprehensive type hints to all 24 functions/methods:
+    - Module-level: `_cleanup_all_instances() -> None`, `_register_instance(instance: 'EpisodicMemoryStore') -> None`
+    - Episode class: `to_dict() -> Dict[str, Any]`, `from_dict(data: Dict[str, Any]) -> 'Episode'`
+    - EpisodicMemoryStore public methods: `__init__() -> None`, `start_forgetting_background_task() -> None`, `stop_forgetting_background_task() -> None`, `record_retrieval() -> None`, `save_state() -> None`, `load_state() -> None`, `cleanup() -> None`
+    - EpisodicMemoryStore private methods: `_initialize_vector_db() -> None`, `_initialize_ebbinghaus() -> None`, `_forgetting_loop() -> None`, `_process_forgetting() -> None`, `_update_indices() -> None`, `_remove_from_indices() -> None`, `_remove_from_vector_db() -> None`, `_add_to_vector_db() -> None`, `_consolidate_memory() -> None`, `_offload_episode() -> None`
+    - Pre-existing type hints preserved: `_validate_episode_data`, `_should_reinforce_memory`, `_compute_importance`, `_generate_embedding`, `_get_episode_by_id`, `_load_offloaded_episode`, all public retrieval methods, `store_episode`, `get_*` methods
+  - All 56 episodic memory integration tests pass
 
 - [ ] Add type hints to all public functions in `integrations/autonomous_worker.py`.
 
