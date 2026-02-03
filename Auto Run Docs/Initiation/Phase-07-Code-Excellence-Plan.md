@@ -187,7 +187,14 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 22 episodic memory integration tests pass
 
 ### 7C.3 - Fix Division by Zero
-- [ ] Fix `neuro_memory/online_learning.py:119` - Add check for zero sum before division: `sum_priorities = np.sum(priorities); probabilities = np.ones_like(priorities) / len(priorities) if sum_priorities == 0 else priorities / sum_priorities`.
+- [x] Fix `neuro_memory/online_learning.py:119` - Add check for zero sum before division: `sum_priorities = np.sum(priorities); probabilities = np.ones_like(priorities) / len(priorities) if sum_priorities == 0 else priorities / sum_priorities`.
+  - **COMPLETED (2026-02-03)**: Added zero-sum check before division in `sample_replay_batch()` method:
+    - Lines 118-123: `sum_priorities = np.sum(priorities)` computed first
+    - If `sum_priorities == 0`, uses uniform distribution: `probabilities = np.ones_like(priorities) / len(priorities)`
+    - Otherwise uses original priority-weighted sampling: `probabilities = priorities / sum_priorities`
+  - Created comprehensive test suite in `tests/test_online_learning.py` with 20 tests
+  - Key test `test_sample_with_zero_priorities_division_by_zero_fix` verifies the fix handles all-zero priorities
+  - All 20 online learning tests pass, 413 total project tests pass
 
 ### 7C.4 - Add Input Validation
 - [ ] Add validation to `neuro_memory/memory/forgetting.py` functions - Check that activation values are finite and non-negative. Raise ValueError for invalid inputs.

@@ -116,7 +116,12 @@ class OnlineLearner:
 
         # Sample with priority (higher surprise = higher probability)
         priorities = np.array([exp['priority'] for exp in self.replay_buffer])
-        probabilities = priorities / np.sum(priorities)
+        sum_priorities = np.sum(priorities)
+        # Handle division by zero: if all priorities are zero, use uniform distribution
+        if sum_priorities == 0:
+            probabilities = np.ones_like(priorities) / len(priorities)
+        else:
+            probabilities = priorities / sum_priorities
 
         sample_size = min(batch_size, len(self.replay_buffer))
         indices = np.random.choice(
@@ -184,7 +189,7 @@ class OnlineLearner:
                 fisher = self.fisher_information[param_name]
                 ewc_loss += np.sum(fisher * (param_diff ** 2))
 
-        return self.config.ewc_lambda * ewc_loss / 2.0
+        return float(self.config.ewc_lambda * ewc_loss / 2.0)
 
     def update_fisher_information(
         self,
