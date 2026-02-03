@@ -49,7 +49,11 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Line 513: `except (DockerException, APIError) as e:` for orphan container cleanup
   - All handlers now log warnings with error context instead of silently ignoring
 
-- [ ] Fix `integrations/browser_agent.py` - Find and replace all bare except clauses with specific exception types and proper error logging.
+- [x] Fix `integrations/browser_agent.py` - Find and replace all bare except clauses with specific exception types and proper error logging.
+  - **COMPLETED (2026-02-03)**: Fixed 3 bare except clauses:
+    - Lines 197, 202: In `click()` method, replaced bare excepts in CSS/text selector fallback logic with `except Exception as css_err:` and proper nested try-except to capture both errors
+    - Line 337: In `close()` method, replaced bare except with `except (OSError, RuntimeError, AttributeError) as e:` with warning message
+  - All exception handlers now use specific types or capture the exception for logging
 
 - [ ] Fix `integrations/neuro_memory_integration.py:101` - Replace bare except in memory load with specific exception and proper fallback behavior.
 

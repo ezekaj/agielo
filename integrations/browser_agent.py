@@ -194,13 +194,21 @@ class BrowserAgent:
                 # Try CSS selector first, then text
                 try:
                     self.page.click(selector, timeout=5000)
-                except:
-                    self.page.click(f"text={selector}", timeout=5000)
+                except Exception as css_err:
+                    # CSS selector failed, try text selector as fallback
+                    try:
+                        self.page.click(f"text={selector}", timeout=5000)
+                    except Exception as text_err:
+                        raise Exception(f"CSS selector failed: {css_err}; Text selector failed: {text_err}")
             else:
                 try:
                     element = self.browser.find_element(By.CSS_SELECTOR, selector)
-                except:
-                    element = self.browser.find_element(By.LINK_TEXT, selector)
+                except Exception as css_err:
+                    # CSS selector failed, try link text as fallback
+                    try:
+                        element = self.browser.find_element(By.LINK_TEXT, selector)
+                    except Exception as link_err:
+                        raise Exception(f"CSS selector failed: {css_err}; Link text failed: {link_err}")
                 element.click()
 
             self.history.append({
@@ -334,8 +342,10 @@ class BrowserAgent:
             else:
                 if self.browser:
                     self.browser.quit()
-        except:
-            pass
+        except (OSError, RuntimeError, AttributeError) as e:
+            # Ignore errors during browser cleanup - browser may already be closed
+            # or resources may have been freed
+            print(f"[Browser] Cleanup warning (safe to ignore): {e}")
 
 
 # Simple command interface
