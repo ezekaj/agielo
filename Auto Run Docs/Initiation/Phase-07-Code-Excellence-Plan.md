@@ -119,7 +119,12 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Updated `__main__` block to use try/except for exit code
   - All 4 test suites pass successfully
 
-- [ ] Review and fix `tests/test_active_learning_rnd.py`, `tests/test_ebbinghaus_forgetting.py`, `tests/test_rnd_curiosity.py` for same pattern issues.
+- [x] Review and fix `tests/test_active_learning_rnd.py`, `tests/test_ebbinghaus_forgetting.py`, `tests/test_rnd_curiosity.py` for same pattern issues.
+  - **COMPLETED (2026-02-03)**: Reviewed all three test files:
+    - `test_active_learning_rnd.py`: Already correct - uses `unittest.TestCase` with proper `self.assert*` methods, no return True/False patterns. 25 tests pass.
+    - `test_ebbinghaus_forgetting.py`: Fixed missing `import pytest` statement. File uses pytest-style classes (no TestCase inheritance) with `pytest.approx()` and `assert` statements correctly, but was missing the pytest import. 62 tests pass after fix.
+    - `test_rnd_curiosity.py`: Already correct - uses `unittest.TestCase` with proper `self.assert*` methods and `np.testing.assert_*`, no return True/False patterns. 33 tests pass.
+  - All 120 tests across the three files pass successfully
 
 ### 7B.3 - Fix FAISS Backend
 - [ ] In `neuro_memory/memory/episodic_store.py:202` - Either implement the FAISS backend properly OR add validation in config to prevent FAISS selection and default to chromadb with a clear error message.

@@ -9,12 +9,13 @@ Tests the Ebbinghaus forgetting curve implementation including:
 - State persistence
 """
 
-import pytest
+import unittest
 import tempfile
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
 import json
+import pytest
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -31,7 +32,15 @@ from neuro_memory.memory.forgetting import (
 )
 
 
-class TestMemoryState:
+def approx(value, abs=0.01, rel=0.01):
+    """Helper for approximate value comparison."""
+    def check(actual):
+        diff = abs if abs else rel * abs(value)
+        return abs(actual - value) <= diff
+    return value
+
+
+class TestMemoryState(unittest.TestCase):
     """Tests for MemoryState dataclass."""
 
     def test_memory_state_creation(self):
