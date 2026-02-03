@@ -390,7 +390,15 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Pre-existing type hints preserved: `_validate_episode_data`, `_should_reinforce_memory`, `_compute_importance`, `_generate_embedding`, `_get_episode_by_id`, `_load_offloaded_episode`, all public retrieval methods, `store_episode`, `get_*` methods
   - All 56 episodic memory integration tests pass
 
-- [ ] Add type hints to all public functions in `integrations/autonomous_worker.py`.
+- [x] Add type hints to all public functions in `integrations/autonomous_worker.py`.
+  - **COMPLETED (2026-02-03)**: Added comprehensive type hints to all 53 functions/methods:
+    - Module-level: `_cleanup_all_instances() -> None`, `_register_instance(instance: 'AutonomousWorker') -> None`, `get_autonomous_worker() -> AutonomousWorker`
+    - GoalEngine class (11 methods): `__init__() -> None`, `_generate_id() -> str`, `create_goal() -> Goal`, `get_next_goal() -> Optional[Goal]`, `update_goal() -> Optional[Goal]`, `complete_goal() -> Optional[Goal]`, `fail_goal() -> Optional[Goal]`, `generate_goals_from_state() -> List[Goal]`, `_load_goals() -> None`, `_save_goals() -> None`, `get_stats() -> Dict[str, Any]`
+    - PromptQueue class (5 methods): `__init__() -> None`, `add() -> None`, `get() -> Optional[Tuple[str, Dict[str, Any]]]`, `size() -> int`, `get_stats() -> Dict[str, int]`
+    - AutonomousWorker class (31 methods): All public and private methods including `__init__`, properties (`evolution`, `trainer`, `active_learner`, `super_agent`, `code_evolution`), `ask_llm`, `check_llm_available`, `execute_goal`, all `_execute_*_goal` methods, `start`, `stop`, `cleanup`, `_run_loop`, `_process_prompt`, `_generate_autonomous_goals`, `add_goal`, `add_prompt`, `get_status`, `reflect`, `_load_stats`, `_save_stats`
+    - Updated Dict parameter types to `Dict[str, Any]` or more specific types where appropriate
+    - Added `Optional[]` wrappers for nullable parameters
+  - All 19 autonomous worker tests pass
 
 ---
 

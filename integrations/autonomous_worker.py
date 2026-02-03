@@ -48,7 +48,7 @@ from config.paths import KNOWLEDGE_DIR, LM_STUDIO_URL, DEFAULT_MODEL
 _autonomous_worker_instances: List[weakref.ref] = []
 
 
-def _cleanup_all_instances():
+def _cleanup_all_instances() -> None:
     """Cleanup function called at program exit to stop workers and save all state."""
     for ref in _autonomous_worker_instances:
         instance = ref()
@@ -60,7 +60,7 @@ def _cleanup_all_instances():
 atexit.register(_cleanup_all_instances)
 
 
-def _register_instance(instance: 'AutonomousWorker'):
+def _register_instance(instance: 'AutonomousWorker') -> None:
     """Register an AutonomousWorker instance for cleanup on exit."""
     _autonomous_worker_instances.append(weakref.ref(instance))
 
@@ -148,7 +148,7 @@ class GoalEngine:
     - Evolution state (what needs improvement?)
     """
 
-    def __init__(self, storage_path: Path):
+    def __init__(self, storage_path: Path) -> None:
         self.storage_path = storage_path
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.goals_file = storage_path / "goals.json"
@@ -163,7 +163,7 @@ class GoalEngine:
                     goal_type: GoalType,
                     description: str,
                     priority: GoalPriority = GoalPriority.NORMAL,
-                    metadata: Dict = None) -> Goal:
+                    metadata: Optional[Dict[str, Any]] = None) -> Goal:
         """Create a new goal."""
         goal = Goal(
             id=self._generate_id(),
@@ -186,7 +186,7 @@ class GoalEngine:
         pending.sort(key=lambda g: (g.priority.value, g.created_at))
         return pending[0]
 
-    def update_goal(self, goal_id: str, **updates):
+    def update_goal(self, goal_id: str, **updates: Any) -> Optional[Goal]:
         """Update a goal's status/progress."""
         for goal in self.goals:
             if goal.id == goal_id:
@@ -197,7 +197,7 @@ class GoalEngine:
                 return goal
         return None
 
-    def complete_goal(self, goal_id: str, result: Dict = None):
+    def complete_goal(self, goal_id: str, result: Optional[Dict[str, Any]] = None) -> Optional[Goal]:
         """Mark a goal as completed."""
         return self.update_goal(
             goal_id,
@@ -206,7 +206,7 @@ class GoalEngine:
             result=result
         )
 
-    def fail_goal(self, goal_id: str, error: str):
+    def fail_goal(self, goal_id: str, error: str) -> Optional[Goal]:
         """Mark a goal as failed."""
         goal = self.update_goal(goal_id, status="failed", error=error)
         if goal and goal.attempts < goal.max_attempts:
@@ -217,9 +217,9 @@ class GoalEngine:
         return goal
 
     def generate_goals_from_state(self,
-                                   evolution_stats: Dict,
-                                   active_learning_stats: Dict,
-                                   rnd_curiosity_stats: Dict = None) -> List[Goal]:
+                                   evolution_stats: Dict[str, Any],
+                                   active_learning_stats: Dict[str, Any],
+                                   rnd_curiosity_stats: Optional[Dict[str, Any]] = None) -> List[Goal]:
         """
         Automatically generate goals based on system state.
         This is the AI setting its own goals!
@@ -272,7 +272,7 @@ class GoalEngine:
 
         return new_goals
 
-    def _load_goals(self):
+    def _load_goals(self) -> None:
         """Load goals from disk."""
         if self.goals_file.exists():
             try:
@@ -285,7 +285,7 @@ class GoalEngine:
         else:
             self.goals = []
 
-    def _save_goals(self):
+    def _save_goals(self) -> None:
         """Save goals to disk."""
         try:
             with open(self.goals_file, 'w') as f:
@@ -293,10 +293,10 @@ class GoalEngine:
         except Exception as e:
             print(f"[GoalEngine] Error saving goals: {e}")
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get goal statistics."""
-        by_status = {}
-        by_type = {}
+        by_status: Dict[str, int] = {}
+        by_type: Dict[str, int] = {}
         for g in self.goals:
             by_status[g.status] = by_status.get(g.status, 0) + 1
             by_type[g.type.value] = by_type.get(g.type.value, 0) + 1
@@ -321,12 +321,12 @@ class PromptQueue:
     - Self-generated exploration (low priority)
     """
 
-    def __init__(self, max_size: int = 1000):
-        self.queue = queue.PriorityQueue(maxsize=max_size)
-        self._processed_count = 0
-        self._lock = threading.Lock()
+    def __init__(self, max_size: int = 1000) -> None:
+        self.queue: queue.PriorityQueue[Tuple[int, float, str, Dict[str, Any]]] = queue.PriorityQueue(maxsize=max_size)
+        self._processed_count: int = 0
+        self._lock: threading.Lock = threading.Lock()
 
-    def add(self, prompt: str, priority: int = 3, metadata: Dict = None):
+    def add(self, prompt: str, priority: int = 3, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Add prompt to queue. Lower priority number = higher priority."""
         item = (priority, time.time(), prompt, metadata or {})
         try:
@@ -334,7 +334,7 @@ class PromptQueue:
         except queue.Full:
             print("[PromptQueue] Queue full, dropping oldest low-priority item")
 
-    def get(self, timeout: float = None) -> Optional[Tuple[str, Dict]]:
+    def get(self, timeout: Optional[float] = None) -> Optional[Tuple[str, Dict[str, Any]]]:
         """Get next prompt from queue."""
         try:
             priority, timestamp, prompt, metadata = self.queue.get(timeout=timeout)
@@ -347,7 +347,7 @@ class PromptQueue:
     def size(self) -> int:
         return self.queue.qsize()
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, int]:
         return {
             "queue_size": self.size(),
             "processed_count": self._processed_count
@@ -366,27 +366,27 @@ class AutonomousWorker:
     """
 
     def __init__(self,
-                 storage_path: str = None,
-                 lm_studio_url: str = None,
-                 model: str = None):
+                 storage_path: Optional[str] = None,
+                 lm_studio_url: Optional[str] = None,
+                 model: Optional[str] = None) -> None:
 
-        self.storage_path = Path(storage_path or os.path.join(KNOWLEDGE_DIR, "autonomous"))
+        self.storage_path: Path = Path(storage_path or os.path.join(KNOWLEDGE_DIR, "autonomous"))
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
-        self.lm_studio_url = lm_studio_url or LM_STUDIO_URL
-        self.model = model or DEFAULT_MODEL
+        self.lm_studio_url: str = lm_studio_url or LM_STUDIO_URL
+        self.model: str = model or DEFAULT_MODEL
 
         # Core components
-        self.goal_engine = GoalEngine(self.storage_path / "goals")
-        self.prompt_queue = PromptQueue()
+        self.goal_engine: GoalEngine = GoalEngine(self.storage_path / "goals")
+        self.prompt_queue: PromptQueue = PromptQueue()
 
         # State
-        self.running = False
-        self.is_busy = False
+        self.running: bool = False
+        self.is_busy: bool = False
         self.current_goal: Optional[Goal] = None
 
         # Statistics
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             "started_at": None,
             "prompts_processed": 0,
             "goals_completed": 0,
@@ -395,21 +395,21 @@ class AutonomousWorker:
             "code_evolved": 0,
             "errors": []
         }
-        self.stats_file = self.storage_path / "stats.json"
+        self.stats_file: Path = self.storage_path / "stats.json"
         self._load_stats()
 
         # Integrations (lazy loaded)
-        self._evolution = None
-        self._trainer = None
-        self._active_learner = None
-        self._super_agent = None
-        self._code_evolution = None
+        self._evolution: Optional[Any] = None
+        self._trainer: Optional[Any] = None
+        self._active_learner: Optional[Any] = None
+        self._super_agent: Optional[Any] = None
+        self._code_evolution: Optional[Any] = None
 
         # Worker thread
         self._thread: Optional[threading.Thread] = None
 
         # Callbacks
-        self.on_prompt_complete: Optional[Callable[[str, Dict], None]] = None
+        self.on_prompt_complete: Optional[Callable[[str, Dict[str, Any]], None]] = None
         self.on_goal_complete: Optional[Callable[[Goal], None]] = None
         self.on_error: Optional[Callable[[Exception], None]] = None
 
@@ -421,7 +421,7 @@ class AutonomousWorker:
     # ═══════════════════════════════════════════════════════════════════
 
     @property
-    def evolution(self):
+    def evolution(self) -> Optional[Any]:
         """Lazy load self-evolution system."""
         if self._evolution is None:
             try:
@@ -432,7 +432,7 @@ class AutonomousWorker:
         return self._evolution
 
     @property
-    def trainer(self):
+    def trainer(self) -> Optional[Any]:
         """Lazy load knowledge trainer."""
         if self._trainer is None:
             try:
@@ -443,7 +443,7 @@ class AutonomousWorker:
         return self._trainer
 
     @property
-    def active_learner(self):
+    def active_learner(self) -> Optional[Any]:
         """Lazy load active learning system."""
         if self._active_learner is None:
             try:
@@ -454,7 +454,7 @@ class AutonomousWorker:
         return self._active_learner
 
     @property
-    def super_agent(self):
+    def super_agent(self) -> Optional[Any]:
         """Lazy load super agent for web/github fetching."""
         if self._super_agent is None:
             try:
@@ -468,7 +468,7 @@ class AutonomousWorker:
         return self._super_agent
 
     @property
-    def code_evolution(self):
+    def code_evolution(self) -> Optional[Any]:
         """Lazy load code evolution system."""
         if self._code_evolution is None:
             try:
@@ -482,7 +482,7 @@ class AutonomousWorker:
     # LLM INTERACTION
     # ═══════════════════════════════════════════════════════════════════
 
-    def ask_llm(self, prompt: str, system: str = None, max_tokens: int = 2000) -> str:
+    def ask_llm(self, prompt: str, system: Optional[str] = None, max_tokens: int = 2000) -> str:
         """Ask the local LLM a question."""
         import urllib.request
 
@@ -526,7 +526,7 @@ class AutonomousWorker:
     # GOAL EXECUTION
     # ═══════════════════════════════════════════════════════════════════
 
-    def execute_goal(self, goal: Goal) -> Dict:
+    def execute_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a single goal."""
         self.current_goal = goal
         goal.status = "in_progress"
@@ -580,7 +580,7 @@ class AutonomousWorker:
 
         return result
 
-    def _execute_learn_goal(self, goal: Goal) -> Dict:
+    def _execute_learn_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a learning goal."""
         topic = goal.metadata.get("topic") or goal.description.replace("Learn about: ", "")
 
@@ -614,7 +614,7 @@ class AutonomousWorker:
 
         return {"success": False, "message": "Super agent not available"}
 
-    def _execute_improve_goal(self, goal: Goal) -> Dict:
+    def _execute_improve_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute an improvement goal (code improvement)."""
         target = goal.metadata.get("target") or goal.description
 
@@ -654,7 +654,7 @@ IMPROVED CODE:"""
             "improvement": improved[:500]
         }
 
-    def _execute_research_goal(self, goal: Goal) -> Dict:
+    def _execute_research_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a research goal (deep research)."""
         topic = goal.metadata.get("topic") or goal.description.replace("Research: ", "")
 
@@ -699,7 +699,7 @@ RESEARCH SUMMARY:"""
             "summary": summary[:1000]
         }
 
-    def _execute_fetch_goal(self, goal: Goal) -> Dict:
+    def _execute_fetch_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a fetch goal (GitHub/web fetching)."""
         url = goal.metadata.get("url")
         fetch_type = goal.metadata.get("fetch_type", "github")
@@ -736,7 +736,7 @@ RESEARCH SUMMARY:"""
                 "content_length": len(content)
             }
 
-    def _execute_evolve_goal(self, goal: Goal) -> Dict:
+    def _execute_evolve_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute an evolution goal (self-modification)."""
         target = goal.metadata.get("target", "self")
 
@@ -767,7 +767,7 @@ RESEARCH SUMMARY:"""
             "improvements": improvements
         }
 
-    def _execute_benchmark_goal(self, goal: Goal) -> Dict:
+    def _execute_benchmark_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a benchmark goal."""
         print(f"[Autonomous] Benchmarking...")
 
@@ -806,7 +806,7 @@ RESEARCH SUMMARY:"""
             "facts_learned": stats.get("total_facts", 0)
         }
 
-    def _execute_consolidate_goal(self, goal: Goal) -> Dict:
+    def _execute_consolidate_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute a memory consolidation goal."""
         print(f"[Autonomous] Consolidating memory...")
 
@@ -824,7 +824,7 @@ RESEARCH SUMMARY:"""
             "message": "Memory consolidated"
         }
 
-    def _execute_explore_goal(self, goal: Goal) -> Dict:
+    def _execute_explore_goal(self, goal: Goal) -> Dict[str, Any]:
         """Execute an exploration goal (RND-driven)."""
         area = goal.metadata.get("area") or goal.description.replace("Explore novel area: ", "")
 
@@ -851,7 +851,7 @@ RESEARCH SUMMARY:"""
     # MAIN AUTONOMOUS LOOP
     # ═══════════════════════════════════════════════════════════════════
 
-    def start(self):
+    def start(self) -> None:
         """Start the autonomous worker."""
         if self.running:
             print("[AutonomousWorker] Already running")
@@ -863,7 +863,7 @@ RESEARCH SUMMARY:"""
         self._thread.start()
         print("[AutonomousWorker] Started autonomous loop")
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the autonomous worker."""
         self.running = False
         if self._thread:
@@ -871,7 +871,7 @@ RESEARCH SUMMARY:"""
         print("[AutonomousWorker] Stopped")
         self._save_stats()
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Cleanup resources and save state on exit.
 
@@ -903,7 +903,7 @@ RESEARCH SUMMARY:"""
         except Exception as e:
             print(f"[AutonomousWorker] Cleanup error: {e}")
 
-    def _run_loop(self):
+    def _run_loop(self) -> None:
         """Main autonomous loop."""
         while self.running:
             try:
@@ -947,7 +947,7 @@ RESEARCH SUMMARY:"""
                 })
                 time.sleep(5)
 
-    def _process_prompt(self, prompt: str, metadata: Dict):
+    def _process_prompt(self, prompt: str, metadata: Dict[str, Any]) -> None:
         """Process a prompt from the queue."""
         self.is_busy = True
 
@@ -996,7 +996,7 @@ RESEARCH SUMMARY:"""
 
         self.is_busy = False
 
-    def _generate_autonomous_goals(self):
+    def _generate_autonomous_goals(self) -> None:
         """Generate goals autonomously based on system state."""
         evolution_stats = self.evolution.get_stats() if self.evolution else {}
 
@@ -1033,9 +1033,9 @@ RESEARCH SUMMARY:"""
     # ═══════════════════════════════════════════════════════════════════
 
     def add_goal(self, description: str,
-                 goal_type: GoalType = None,
+                 goal_type: Optional[GoalType] = None,
                  priority: GoalPriority = GoalPriority.NORMAL,
-                 metadata: Dict = None) -> Goal:
+                 metadata: Optional[Dict[str, Any]] = None) -> Goal:
         """Add a goal manually."""
         if goal_type is None:
             # Infer type from description
@@ -1055,11 +1055,11 @@ RESEARCH SUMMARY:"""
 
         return self.goal_engine.create_goal(goal_type, description, priority, metadata)
 
-    def add_prompt(self, prompt: str, priority: int = 3, metadata: Dict = None):
+    def add_prompt(self, prompt: str, priority: int = 3, metadata: Optional[Dict[str, Any]] = None) -> None:
         """Add a prompt to the queue."""
         self.prompt_queue.add(prompt, priority, metadata)
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> Dict[str, Any]:
         """Get current worker status."""
         return {
             "running": self.running,
@@ -1073,9 +1073,9 @@ RESEARCH SUMMARY:"""
 
     def reflect(self) -> str:
         """Generate reflection on autonomous work."""
-        status = self.get_status()
+        status: Dict[str, Any] = self.get_status()
 
-        reflection = f"""
+        reflection: str = f"""
 === AUTONOMOUS WORKER STATUS ===
 Running: {status['running']}
 Busy: {status['is_busy']}
@@ -1103,7 +1103,7 @@ Current goal: {status['current_goal']['description'] if status['current_goal'] e
     # PERSISTENCE
     # ═══════════════════════════════════════════════════════════════════
 
-    def _load_stats(self):
+    def _load_stats(self) -> None:
         """Load stats from disk."""
         if self.stats_file.exists():
             try:
@@ -1112,7 +1112,7 @@ Current goal: {status['current_goal']['description'] if status['current_goal'] e
             except (json.JSONDecodeError, IOError, OSError) as e:
                 print(f"[AutonomousWorker] Could not load stats: {e}")
 
-    def _save_stats(self):
+    def _save_stats(self) -> None:
         """Save stats to disk."""
         try:
             with open(self.stats_file, 'w') as f:
