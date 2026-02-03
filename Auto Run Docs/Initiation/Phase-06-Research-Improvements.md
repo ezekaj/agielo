@@ -85,7 +85,7 @@ Maintain multiple code variants and evolve the best ones (like Darwin Godel Mach
 
 AI generates questions, answers them, evaluates itself, learns from mistakes.
 
-- [ ] Create self-play system in `integrations/self_play.py`:
+- [x] Create self-play system in `integrations/self_play.py`:
   - Create `SelfPlayTrainer` class
   - `generate_question(topic: str, difficulty: str)` - use LLM to create question
   - `attempt_answer(question: str)` - get AI's answer using current knowledge
@@ -93,6 +93,7 @@ AI generates questions, answers them, evaluates itself, learns from mistakes.
   - `learn_from_mistake(question, wrong_answer, correct_answer)` - add to training data
   - `run_self_play_round(topics: List[str], n_questions: int)` - full cycle
   - Track metrics: questions_generated, correct_rate, improvement_over_time
+  - **Completed 2026-02-03**: Created `integrations/self_play.py` with full `SelfPlayTrainer` class including: `Difficulty` enum (EASY/MEDIUM/HARD), `SelfPlayQuestion`/`SelfPlayAttempt`/`SelfPlayRound` dataclasses, question generation with templates per difficulty, LLM-based answer evaluation against ground truth, learning from mistakes by adding to training_data.jsonl, full self-play round execution with metrics, and persistent state storage. All 29 tests pass in `tests/test_self_play.py`.
 
 - [ ] Add difficulty progression in `integrations/self_play.py`:
   - Start with easy questions (factual recall)
