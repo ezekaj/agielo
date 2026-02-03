@@ -610,5 +610,209 @@ class TestVectorDBBackendValidation:
         assert "chromadb" in str(exc_info.value)
 
 
+class TestEpisodeInputValidation:
+    """Test input validation for episode storage."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory."""
+        temp = tempfile.mkdtemp()
+        yield temp
+        shutil.rmtree(temp, ignore_errors=True)
+
+    @pytest.fixture
+    def memory_store(self, temp_dir):
+        """Create a memory store for testing."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False  # Disable for simpler tests
+        )
+        return EpisodicMemoryStore(config)
+
+    # Content validation tests
+
+    def test_valid_content_accepted(self, memory_store):
+        """Test that valid numpy array content is accepted."""
+        content = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        episode = memory_store.store_episode(content=content, surprise=1.0)
+        assert episode is not None
+        assert np.allclose(episode.content, content)
+
+    def test_content_nan_rejected(self, memory_store):
+        """Test that content with NaN values is rejected."""
+        content = np.array([1.0, np.nan, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "non-finite" in str(exc_info.value).lower()
+        assert "content" in str(exc_info.value).lower()
+
+    def test_content_inf_rejected(self, memory_store):
+        """Test that content with Inf values is rejected."""
+        content = np.array([1.0, np.inf, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "non-finite" in str(exc_info.value).lower()
+
+    def test_content_negative_inf_rejected(self, memory_store):
+        """Test that content with -Inf values is rejected."""
+        content = np.array([1.0, -np.inf, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "non-finite" in str(exc_info.value).lower()
+
+    def test_content_multiple_non_finite_rejected(self, memory_store):
+        """Test that content with multiple non-finite values reports count."""
+        content = np.array([np.nan, np.inf, -np.inf, 1.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "3" in str(exc_info.value)  # 3 non-finite values
+
+    def test_content_type_error_non_array(self, memory_store):
+        """Test that non-numpy array content raises TypeError."""
+        content = [1.0, 2.0, 3.0]  # Python list, not numpy array
+        with pytest.raises(TypeError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "numpy array" in str(exc_info.value).lower()
+        assert "list" in str(exc_info.value).lower()
+
+    def test_empty_content_accepted(self, memory_store):
+        """Test that empty numpy array is accepted."""
+        content = np.array([])
+        episode = memory_store.store_episode(content=content, surprise=1.0)
+        assert episode is not None
+
+    # Surprise validation tests
+
+    def test_valid_surprise_accepted(self, memory_store):
+        """Test that valid surprise values are accepted."""
+        content = np.array([1.0, 2.0, 3.0])
+        episode = memory_store.store_episode(content=content, surprise=2.5)
+        assert episode is not None
+        assert episode.surprise == 2.5
+
+    def test_zero_surprise_accepted(self, memory_store):
+        """Test that zero surprise is accepted."""
+        content = np.array([1.0, 2.0, 3.0])
+        episode = memory_store.store_episode(content=content, surprise=0.0)
+        assert episode is not None
+        assert episode.surprise == 0.0
+
+    def test_surprise_nan_rejected(self, memory_store):
+        """Test that NaN surprise is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=np.nan)
+        assert "surprise" in str(exc_info.value).lower()
+        assert "finite" in str(exc_info.value).lower()
+
+    def test_surprise_inf_rejected(self, memory_store):
+        """Test that Inf surprise is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=np.inf)
+        assert "surprise" in str(exc_info.value).lower()
+
+    def test_surprise_negative_inf_rejected(self, memory_store):
+        """Test that -Inf surprise is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=-np.inf)
+        assert "surprise" in str(exc_info.value).lower()
+
+    def test_negative_surprise_rejected(self, memory_store):
+        """Test that negative surprise is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=-1.0)
+        assert "surprise" in str(exc_info.value).lower()
+        assert "non-negative" in str(exc_info.value).lower()
+
+    # Embedding validation tests
+
+    def test_valid_embedding_accepted(self, memory_store):
+        """Test that valid embedding is accepted."""
+        content = np.array([1.0, 2.0, 3.0])
+        embedding = np.random.randn(64)
+        episode = memory_store.store_episode(
+            content=content, surprise=1.0, embedding=embedding
+        )
+        assert episode is not None
+        assert episode.embedding is not None
+
+    def test_embedding_nan_rejected(self, memory_store):
+        """Test that embedding with NaN values is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        embedding = np.array([1.0, np.nan, 3.0] + [0.0] * 61)
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(
+                content=content, surprise=1.0, embedding=embedding
+            )
+        assert "embedding" in str(exc_info.value).lower()
+        assert "non-finite" in str(exc_info.value).lower()
+
+    def test_embedding_inf_rejected(self, memory_store):
+        """Test that embedding with Inf values is rejected."""
+        content = np.array([1.0, 2.0, 3.0])
+        embedding = np.array([1.0, np.inf, 3.0] + [0.0] * 61)
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(
+                content=content, surprise=1.0, embedding=embedding
+            )
+        assert "embedding" in str(exc_info.value).lower()
+
+    def test_embedding_type_error_non_array(self, memory_store):
+        """Test that non-numpy array embedding raises TypeError."""
+        content = np.array([1.0, 2.0, 3.0])
+        embedding = [1.0, 2.0, 3.0]  # Python list
+        with pytest.raises(TypeError) as exc_info:
+            memory_store.store_episode(
+                content=content, surprise=1.0, embedding=embedding
+            )
+        assert "embedding" in str(exc_info.value).lower()
+        assert "numpy array" in str(exc_info.value).lower()
+
+    def test_none_embedding_generates_valid(self, memory_store):
+        """Test that None embedding generates a valid embedding."""
+        content = np.array([1.0, 2.0, 3.0])
+        episode = memory_store.store_episode(content=content, surprise=1.0)
+        assert episode.embedding is not None
+        assert np.all(np.isfinite(episode.embedding))
+
+    # Importance computation validation
+
+    def test_importance_always_valid(self, memory_store):
+        """Test that computed importance is always valid."""
+        content = np.array([1.0, 2.0, 3.0])
+        # Test with various valid surprise values
+        for surprise in [0.0, 0.5, 1.0, 5.0, 10.0, 100.0]:
+            episode = memory_store.store_episode(content=content, surprise=surprise)
+            assert np.isfinite(episode.importance)
+            assert 0.0 <= episode.importance <= 1.0
+
+    def test_large_surprise_produces_valid_importance(self, memory_store):
+        """Test that large surprise values produce valid importance."""
+        content = np.array([1.0, 2.0, 3.0])
+        # Use very large surprise - should not overflow
+        episode = memory_store.store_episode(content=content, surprise=1000.0)
+        assert np.isfinite(episode.importance)
+        assert 0.0 <= episode.importance <= 1.0
+
+    # Edge case tests
+
+    def test_multidimensional_content_with_nan_rejected(self, memory_store):
+        """Test that multidimensional content with NaN is rejected."""
+        content = np.array([[1.0, 2.0], [np.nan, 4.0]])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "non-finite" in str(exc_info.value).lower()
+
+    def test_all_nan_content_rejected(self, memory_store):
+        """Test that content with all NaN values is rejected."""
+        content = np.array([np.nan, np.nan, np.nan])
+        with pytest.raises(ValueError) as exc_info:
+            memory_store.store_episode(content=content, surprise=1.0)
+        assert "3" in str(exc_info.value)  # 3 non-finite values
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

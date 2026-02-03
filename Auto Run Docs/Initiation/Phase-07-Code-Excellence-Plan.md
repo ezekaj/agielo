@@ -210,7 +210,21 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Error message verification
   - All 103 related tests pass (81 forgetting + 22 integration)
 
-- [ ] Add validation to `neuro_memory/memory/episodic_store.py` core functions - Validate episode data before storage, check for NaN/Inf in importance values.
+- [x] Add validation to `neuro_memory/memory/episodic_store.py` core functions - Validate episode data before storage, check for NaN/Inf in importance values.
+  - **COMPLETED (2026-02-03)**: Added comprehensive input validation to EpisodicMemoryStore:
+    - Created `_validate_episode_data()` method that validates content, surprise, and embedding before storage
+    - Content validation: Rejects non-numpy arrays and arrays containing NaN/Inf values with detailed error messages
+    - Surprise validation: Rejects NaN/Inf values and negative values (surprise must be non-negative)
+    - Embedding validation: Rejects non-numpy arrays and arrays containing NaN/Inf values
+    - Updated `_compute_importance()` with numerical stability (clips exponent before exp)
+    - Updated `_generate_embedding()` with final safety check for non-finite values
+    - Added import for `validate_finite` from `utils.numerical`
+  - Added 22 new tests in `TestEpisodeInputValidation` class covering:
+    - Valid content acceptance, NaN/Inf/negative-Inf rejection, type errors, empty arrays
+    - Valid surprise acceptance, zero surprise, NaN/Inf rejection, negative rejection
+    - Valid embedding acceptance, NaN/Inf rejection, type errors, auto-generation
+    - Importance computation validity across various surprise values including extremes
+  - All 44 episodic memory integration tests pass
 
 ---
 

@@ -39,6 +39,9 @@ from neuro_memory.memory.forgetting import (
     SpacedRepetitionConfig
 )
 
+# Import numerical stability utilities for validation
+from utils.numerical import validate_finite
+
 
 @dataclass
 class Episode:
@@ -468,6 +471,67 @@ class EpisodicMemoryStore:
 
         return stats
 
+    def _validate_episode_data(
+        self,
+        content: np.ndarray,
+        surprise: float,
+        embedding: Optional[np.ndarray] = None
+    ) -> None:
+        """
+        Validate episode data before storage.
+
+        Checks for NaN/Inf values in numerical fields and validates ranges.
+
+        Args:
+            content: Episode content array
+            surprise: Surprise score
+            embedding: Optional pre-computed embedding
+
+        Raises:
+            ValueError: If any values are invalid (NaN, Inf, or out of expected range)
+            TypeError: If content is not a numpy array
+        """
+        # Validate content type
+        if not isinstance(content, np.ndarray):
+            raise TypeError(
+                f"content must be a numpy array, got {type(content).__name__}"
+            )
+
+        # Validate content contains finite values
+        if content.size > 0 and not np.all(np.isfinite(content)):
+            non_finite_count = np.sum(~np.isfinite(content))
+            raise ValueError(
+                f"content contains {non_finite_count} non-finite values (NaN or Inf). "
+                "Episode data must contain only finite numerical values."
+            )
+
+        # Validate surprise is finite
+        if not np.isfinite(surprise):
+            raise ValueError(
+                f"surprise must be a finite value, got {surprise}. "
+                "NaN and Inf values are not allowed."
+            )
+
+        # Validate surprise is non-negative (surprise scores shouldn't be negative)
+        if surprise < 0:
+            raise ValueError(
+                f"surprise must be non-negative, got {surprise}. "
+                "Negative surprise values are not meaningful."
+            )
+
+        # Validate embedding if provided
+        if embedding is not None:
+            if not isinstance(embedding, np.ndarray):
+                raise TypeError(
+                    f"embedding must be a numpy array, got {type(embedding).__name__}"
+                )
+            if embedding.size > 0 and not np.all(np.isfinite(embedding)):
+                non_finite_count = np.sum(~np.isfinite(embedding))
+                raise ValueError(
+                    f"embedding contains {non_finite_count} non-finite values (NaN or Inf). "
+                    "Embedding vectors must contain only finite numerical values."
+                )
+
     def store_episode(
         self,
         content: np.ndarray,
@@ -480,19 +544,26 @@ class EpisodicMemoryStore:
     ) -> Episode:
         """
         Store a new episodic memory (single-shot learning).
-        
+
         Args:
-            content: Observation content
-            surprise: Surprise/novelty score from BayesianSurpriseEngine
+            content: Observation content (must be numpy array with finite values)
+            surprise: Surprise/novelty score from BayesianSurpriseEngine (must be finite, non-negative)
             timestamp: When this happened (defaults to now)
             location: Where this happened
             entities: Who/what was involved
             metadata: Additional context
-            embedding: Pre-computed embedding (optional)
-            
+            embedding: Pre-computed embedding (optional, must have finite values if provided)
+
         Returns:
             Created Episode object
+
+        Raises:
+            ValueError: If content, surprise, or embedding contain NaN/Inf values
+            TypeError: If content or embedding is not a numpy array
         """
+        # Validate input data before creating episode
+        self._validate_episode_data(content, surprise, embedding)
+
         # Create episode
         episode = Episode(
             content=content,
@@ -550,25 +621,35 @@ class EpisodicMemoryStore:
         Higher surprise → higher importance → prioritized for consolidation.
 
         Args:
-            surprise: Surprise value from Bayesian surprise engine
+            surprise: Surprise value from Bayesian surprise engine (must be finite)
 
         Returns:
             Importance score [0, 1]
+
+        Note:
+            Input validation is performed in store_episode() before this method is called.
+            The sigmoid computation uses clipping to ensure numerical stability.
         """
-        # Sigmoid transformation of surprise
-        importance = 1.0 / (1.0 + np.exp(-surprise + 2.0))
+        # Clip the exponent to prevent overflow in exp()
+        # For surprise=0, exponent=2.0, for surprise=100, exponent=-98 (safe)
+        exponent = np.clip(-surprise + 2.0, -500, 500)
+        importance = 1.0 / (1.0 + np.exp(exponent))
         return float(np.clip(importance, 0.0, 1.0))
     
     def _generate_embedding(self, content: np.ndarray) -> np.ndarray:
         """
         Generate vector embedding for content.
         In production, use a pre-trained encoder (e.g., BERT, Sentence Transformers).
-        
+
         Args:
-            content: Observation content
-            
+            content: Observation content (already validated in store_episode)
+
         Returns:
-            Embedding vector
+            Embedding vector (normalized, finite values guaranteed)
+
+        Note:
+            Content is validated in store_episode() before this method is called.
+            This method ensures the generated embedding is also valid.
         """
         # Simple projection for now (replace with real encoder)
         if len(content) < self.config.embedding_dim:
@@ -578,11 +659,20 @@ class EpisodicMemoryStore:
         else:
             # Use PCA-like projection (simplified)
             embedding = content[:self.config.embedding_dim]
-        
-        # Normalize
+
+        # Normalize (with protection against zero norm)
         norm = float(np.linalg.norm(embedding))
         if norm > 0:
             embedding = embedding / norm
+        # If norm is 0, embedding is all zeros which is valid
+
+        # Final safety check - ensure embedding has no NaN/Inf
+        # This shouldn't happen if content is validated, but defensive programming
+        if not np.all(np.isfinite(embedding)):
+            raise ValueError(
+                "Generated embedding contains non-finite values. "
+                "This indicates a bug in embedding generation or invalid content."
+            )
 
         return embedding
     
