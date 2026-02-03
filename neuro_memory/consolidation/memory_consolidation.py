@@ -88,11 +88,13 @@ class MemoryConsolidationEngine:
 
             for i, ep in enumerate(episodes):
                 # Surprise component
-                surprise_score = ep.surprise if hasattr(ep, 'surprise') else 1.0
+                surprise_score = float(ep.surprise) if hasattr(ep, 'surprise') else 1.0
 
                 # Recency component (more recent = higher priority)
                 time_diff = (now - ep.timestamp).total_seconds()
-                recency_score = np.exp(-time_diff / (24 * 3600))  # Decay over days
+                # Clip exponent to prevent underflow for very old memories
+                decay_exponent = np.clip(-time_diff / (24 * 3600), -500, 0)
+                recency_score = float(np.exp(decay_exponent))  # Decay over days
 
                 # Combined priority
                 priorities[i] = (surprise_score * recency_score) ** self.config.prioritization_alpha
