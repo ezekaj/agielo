@@ -30,12 +30,31 @@ from typing import List, Dict, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from integrations.cognitive_ollama import CognitiveOllama
+from integrations.cognitive_ollama import CognitiveLLM
 from integrations.self_training import SelfTrainer
 from integrations.browser_agent import BrowserAgent, run_browser_command, BROWSER_AVAILABLE
 from integrations.active_learning import get_active_learner, ActiveLearner
-from integrations.benchmark import Benchmark
 from integrations.self_evolution import get_evolution, SelfEvolution
+
+# Code Evolution for population-based code improvement
+try:
+    from integrations.code_evolution import CodeEvolution, get_code_evolution
+    CODE_EVOLUTION_AVAILABLE = True
+    print("[CodeEvolution] Code evolution system: AVAILABLE")
+except ImportError:
+    CODE_EVOLUTION_AVAILABLE = False
+    CodeEvolution = None
+    get_code_evolution = None
+    print("[CodeEvolution] Code evolution not available")
+
+# Super Agent for intelligent web search
+try:
+    from integrations.super_agent import SuperAgent
+    SUPER_AGENT_AVAILABLE = True
+    print("[SuperAgent] Intelligent web search: AVAILABLE")
+except ImportError:
+    SUPER_AGENT_AVAILABLE = False
+    print("[SuperAgent] Not available - using basic search")
 
 # Try to import advanced cognitive modules
 try:
@@ -54,20 +73,90 @@ except ImportError:
 
 
 class WebLearner:
-    """Autonomous web learning capabilities."""
+    """Autonomous web learning capabilities with multi-source parallel search."""
 
     def __init__(self):
         self.learned_facts = []
         self.search_history = []
+        self.cache = {}  # Simple cache to avoid repeated searches
 
-    def search_web(self, query: str) -> List[Dict]:
-        """Search the web using DuckDuckGo (free, no API key)."""
+    def search_web(self, query: str, sources: List[str] = None) -> List[Dict]:
+        """
+        Search multiple free sources in parallel for faster results.
+
+        Available sources:
+        - duckduckgo: Instant answers and related topics
+        - wikipedia: Encyclopedia articles
+        - arxiv: Academic papers (science/tech/math)
+        - stackexchange: Programming Q&A
+        - github: Code repositories
+        - wikidata: Structured facts
+        - openlibrary: Book information
+        - wordnik: Word definitions
+
+        Args:
+            query: Search query
+            sources: List of sources to use (default: all)
+        """
+        # Check cache first
+        cache_key = f"{query}:{','.join(sources or ['all'])}"
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+
+        results = []
+
+        # All available search functions
+        all_sources = {
+            'duckduckgo': self._search_duckduckgo,
+            'wikipedia': self._search_wikipedia,
+            'arxiv': self._search_arxiv,
+            'stackexchange': self._search_stackexchange,
+            'github': self._search_github,
+            'wikidata': self._search_wikidata,
+            'openlibrary': self._search_openlibrary,
+            'wordnik': self._search_wordnik,
+        }
+
+        # Select sources to use
+        if sources:
+            search_funcs = {k: v for k, v in all_sources.items() if k in sources}
+        else:
+            # Default: use all sources
+            search_funcs = all_sources
+
+        # Parallel fetch from all sources
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {
+                executor.submit(func, query): name
+                for name, func in search_funcs.items()
+            }
+
+            for future in as_completed(futures, timeout=12):
+                try:
+                    source_results = future.result(timeout=6)
+                    results.extend(source_results)
+                except Exception:
+                    pass  # Skip failed sources
+
+        # Cache results
+        self.cache[cache_key] = results
+
+        self.search_history.append({
+            'query': query,
+            'time': datetime.now().isoformat(),
+            'results': len(results),
+            'sources': list(search_funcs.keys())
+        })
+
+        return results
+
+    def _search_duckduckgo(self, query: str) -> List[Dict]:
+        """Search DuckDuckGo instant answers."""
         try:
-            # DuckDuckGo instant answer API
             url = f"https://api.duckduckgo.com/?q={urllib.parse.quote(query)}&format=json&no_html=1"
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
 
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 data = json.loads(response.read().decode('utf-8'))
 
             results = []
@@ -77,8 +166,17 @@ class WebLearner:
                 results.append({
                     'title': data.get('Heading', query),
                     'snippet': data['Abstract'],
-                    'source': data.get('AbstractSource', 'DuckDuckGo'),
+                    'source': 'DuckDuckGo',
                     'url': data.get('AbstractURL', '')
+                })
+
+            # Answer (direct answer)
+            if data.get('Answer'):
+                results.append({
+                    'title': 'Direct Answer',
+                    'snippet': data['Answer'],
+                    'source': 'DuckDuckGo',
+                    'url': ''
                 })
 
             # Related topics
@@ -87,19 +185,503 @@ class WebLearner:
                     results.append({
                         'title': topic.get('Text', '')[:50],
                         'snippet': topic.get('Text', ''),
+                        'source': 'DuckDuckGo',
                         'url': topic.get('FirstURL', '')
                     })
 
-            self.search_history.append({
-                'query': query,
-                'time': datetime.now().isoformat(),
-                'results': len(results)
-            })
+            return results
+        except:
+            return []
+
+    def _search_wikipedia(self, query: str) -> List[Dict]:
+        """Search Wikipedia for factual information."""
+        import re
+        results = []
+
+        # Method 1: Wikipedia Search API (finds relevant articles)
+        try:
+            search_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(query)}&format=json&srlimit=3"
+            req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                search_results = data.get('query', {}).get('search', [])
+
+                for r in search_results:
+                    title = r.get('title', '')
+                    snippet = r.get('snippet', '')
+                    # Clean HTML tags
+                    snippet = re.sub(r'<[^>]+>', '', snippet)
+                    if snippet:
+                        results.append({
+                            'title': title,
+                            'snippet': f"{title}: {snippet}",
+                            'source': 'Wikipedia',
+                            'url': f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+                        })
+        except:
+            pass
+
+        # Method 2: Direct page summary (for exact matches)
+        try:
+            search_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(query.replace(' ', '_'))}"
+            req = urllib.request.Request(search_url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            if data.get('extract'):
+                results.append({
+                    'title': data.get('title', query),
+                    'snippet': data['extract'],
+                    'source': 'Wikipedia',
+                    'url': data.get('content_urls', {}).get('desktop', {}).get('page', '')
+                })
+        except:
+            pass
+
+        return results
+
+    def _search_arxiv(self, query: str) -> List[Dict]:
+        """Search ArXiv for academic papers (free, no API key needed)."""
+        try:
+            # ArXiv API - search for papers
+            url = f"http://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query)}&start=0&max_results=3"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=8) as response:
+                content = response.read().decode('utf-8')
+
+            results = []
+            import re
+
+            # Parse XML response (simple regex parsing)
+            entries = re.findall(r'<entry>(.*?)</entry>', content, re.DOTALL)
+
+            for entry in entries[:3]:
+                title_match = re.search(r'<title>(.*?)</title>', entry, re.DOTALL)
+                summary_match = re.search(r'<summary>(.*?)</summary>', entry, re.DOTALL)
+                link_match = re.search(r'<id>(.*?)</id>', entry)
+
+                if title_match and summary_match:
+                    title = title_match.group(1).strip().replace('\n', ' ')
+                    summary = summary_match.group(1).strip().replace('\n', ' ')[:300]
+                    link = link_match.group(1) if link_match else ''
+
+                    results.append({
+                        'title': title,
+                        'snippet': summary,
+                        'source': 'ArXiv',
+                        'url': link
+                    })
 
             return results
+        except:
+            return []
 
-        except Exception as e:
-            return [{'error': str(e)}]
+    def _search_stackexchange(self, query: str) -> List[Dict]:
+        """Search StackExchange sites (StackOverflow, etc.) - free API."""
+        try:
+            # StackExchange API - search across sites
+            url = f"https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q={urllib.parse.quote(query)}&site=stackoverflow&pagesize=3&filter=withbody"
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Accept-Encoding': 'gzip'
+            })
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                # Handle gzip compression
+                import gzip
+                if response.info().get('Content-Encoding') == 'gzip':
+                    content = gzip.decompress(response.read()).decode('utf-8')
+                else:
+                    content = response.read().decode('utf-8')
+                data = json.loads(content)
+
+            results = []
+            import re
+
+            for item in data.get('items', [])[:3]:
+                title = item.get('title', '')
+                # Clean HTML from body
+                body = item.get('body', '')[:300]
+                body = re.sub(r'<[^>]+>', '', body)
+                link = item.get('link', '')
+
+                if title:
+                    results.append({
+                        'title': title,
+                        'snippet': body or title,
+                        'source': 'StackOverflow',
+                        'url': link
+                    })
+
+            return results
+        except:
+            return []
+
+    def _search_github(self, query: str) -> List[Dict]:
+        """Search GitHub repositories and code (free, rate limited)."""
+        try:
+            # GitHub Search API (unauthenticated: 10 requests/min)
+            url = f"https://api.github.com/search/repositories?q={urllib.parse.quote(query)}&sort=stars&per_page=3"
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0',
+                'Accept': 'application/vnd.github.v3+json'
+            })
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            results = []
+
+            for repo in data.get('items', [])[:3]:
+                name = repo.get('full_name', '')
+                description = repo.get('description', '') or 'No description'
+                stars = repo.get('stargazers_count', 0)
+                url = repo.get('html_url', '')
+
+                results.append({
+                    'title': f"{name} ({stars}★)",
+                    'snippet': description[:200],
+                    'source': 'GitHub',
+                    'url': url
+                })
+
+            return results
+        except:
+            return []
+
+    def _search_wikidata(self, query: str) -> List[Dict]:
+        """Search Wikidata for structured facts (free)."""
+        try:
+            # Wikidata API - search entities
+            url = f"https://www.wikidata.org/w/api.php?action=wbsearchentities&search={urllib.parse.quote(query)}&language=en&format=json&limit=3"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            results = []
+
+            for entity in data.get('search', [])[:3]:
+                label = entity.get('label', '')
+                description = entity.get('description', '')
+                entity_id = entity.get('id', '')
+                url = f"https://www.wikidata.org/wiki/{entity_id}"
+
+                if label and description:
+                    results.append({
+                        'title': label,
+                        'snippet': f"{label}: {description}",
+                        'source': 'Wikidata',
+                        'url': url
+                    })
+
+            return results
+        except:
+            return []
+
+    def _search_openlibrary(self, query: str) -> List[Dict]:
+        """Search Open Library for books (free)."""
+        try:
+            # Open Library Search API
+            url = f"https://openlibrary.org/search.json?q={urllib.parse.quote(query)}&limit=3"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            results = []
+
+            for doc in data.get('docs', [])[:3]:
+                title = doc.get('title', '')
+                author = ', '.join(doc.get('author_name', [])[:2]) or 'Unknown author'
+                year = doc.get('first_publish_year', '')
+                key = doc.get('key', '')
+                url = f"https://openlibrary.org{key}" if key else ''
+
+                if title:
+                    snippet = f"{title} by {author}"
+                    if year:
+                        snippet += f" ({year})"
+
+                    results.append({
+                        'title': title,
+                        'snippet': snippet,
+                        'source': 'OpenLibrary',
+                        'url': url
+                    })
+
+            return results
+        except:
+            return []
+
+    def _search_wordnik(self, query: str) -> List[Dict]:
+        """Search Wordnik for word definitions (free tier)."""
+        try:
+            # Wordnik API - basic definition (no API key needed for basic)
+            # Using Wiktionary via DuckDuckGo as fallback
+            url = f"https://api.duckduckgo.com/?q=define+{urllib.parse.quote(query)}&format=json&no_html=1"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode('utf-8'))
+
+            results = []
+
+            # Get definition from DuckDuckGo
+            if data.get('Definition'):
+                results.append({
+                    'title': f"Definition: {query}",
+                    'snippet': data['Definition'],
+                    'source': 'Dictionary',
+                    'url': data.get('DefinitionURL', '')
+                })
+
+            # Also check Abstract for definitions
+            abstract = data.get('Abstract', '')
+            if abstract and 'definition' not in abstract.lower()[:50]:
+                pass  # Skip if not a definition
+            elif abstract:
+                results.append({
+                    'title': query,
+                    'snippet': abstract,
+                    'source': 'Dictionary',
+                    'url': data.get('AbstractURL', '')
+                })
+
+            return results
+        except:
+            return []
+
+    def search_academic(self, query: str) -> List[Dict]:
+        """Search academic sources only (ArXiv, semantic scholar concepts)."""
+        return self.search_web(query, sources=['arxiv', 'wikipedia'])
+
+    def search_code(self, query: str) -> List[Dict]:
+        """Search code-related sources only."""
+        return self.search_web(query, sources=['github', 'stackexchange'])
+
+    def search_facts(self, query: str) -> List[Dict]:
+        """Search factual sources only."""
+        return self.search_web(query, sources=['wikipedia', 'wikidata', 'duckduckgo'])
+
+    def search_books(self, query: str) -> List[Dict]:
+        """Search book-related sources."""
+        return self.search_web(query, sources=['openlibrary', 'wikipedia'])
+
+    def smart_search(self, question: str, category: str = "") -> List[Dict]:
+        """
+        Smart search with parallel multi-query execution.
+
+        Strategies (executed in parallel):
+        1. Direct question search
+        2. Key terms extraction
+        3. Category-specific search
+        4. Question type reformulation (how/what/why)
+        5. Synonym expansion
+        6. Entity extraction
+        7. Quoted phrase search for exact matches
+        """
+        all_results = []
+        key_terms = self._extract_key_terms(question)
+
+        # Build list of queries to execute in parallel
+        queries = []
+
+        # Strategy 1: Direct question search
+        queries.append(question[:100])
+
+        # Strategy 2: Key terms search
+        if key_terms:
+            queries.append(key_terms)
+
+        # Strategy 3: Category-specific search
+        if category:
+            queries.append(f"{category} {key_terms or question[:50]}")
+
+        # Strategy 4: Question type reformulation
+        question_lower = question.lower()
+        if "?" in question:
+            if any(q in question_lower for q in ['what is', 'what are', 'define']):
+                queries.append(f"definition {key_terms}")
+            elif any(q in question_lower for q in ['how to', 'how do', 'how can']):
+                queries.append(f"guide tutorial {key_terms}")
+            elif any(q in question_lower for q in ['why', 'reason', 'cause']):
+                queries.append(f"explanation reason {key_terms}")
+            elif any(q in question_lower for q in ['when', 'date', 'year']):
+                queries.append(f"date history {key_terms}")
+
+        # Strategy 5: Synonym expansion
+        expanded_terms = self._expand_with_synonyms(key_terms)
+        if expanded_terms and expanded_terms != key_terms:
+            queries.append(expanded_terms)
+
+        # Strategy 6: Entity search
+        entities = self._extract_entities(question)
+        if entities:
+            queries.append(' '.join(entities))
+
+        # Strategy 7: Phrase search
+        phrases = self._extract_phrases(question)
+        for phrase in phrases[:2]:
+            queries.append(f'"{phrase}"')
+
+        # Execute all queries in parallel
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {executor.submit(self.search_web, q): q for q in queries}
+
+            for future in as_completed(futures, timeout=15):
+                try:
+                    results = future.result(timeout=5)
+                    all_results.extend(results)
+                except Exception:
+                    pass  # Skip failed queries
+
+        # Deduplicate by snippet content with better matching
+        seen_snippets = set()
+        seen_urls = set()
+        unique_results = []
+
+        for r in all_results:
+            snippet = r.get('snippet', '')[:100]
+            url = r.get('url', '')
+
+            # Skip if we've seen this URL or very similar snippet
+            if url and url in seen_urls:
+                continue
+            if snippet:
+                # Normalize snippet for comparison
+                normalized = ''.join(c for c in snippet.lower() if c.isalnum())[:50]
+                if normalized in seen_snippets:
+                    continue
+                seen_snippets.add(normalized)
+
+            if url:
+                seen_urls.add(url)
+
+            unique_results.append(r)
+
+        # Rank results by relevance to original query
+        ranked_results = self._rank_results(unique_results, question, key_terms)
+
+        return ranked_results[:8]  # Increased max results
+
+    def _extract_key_terms(self, text: str) -> str:
+        """Extract key terms from a question."""
+        # Remove common question words
+        stop_words = {'what', 'how', 'why', 'when', 'where', 'who', 'which', 'is', 'are',
+                      'the', 'a', 'an', 'if', 'does', 'do', 'can', 'will', 'would', 'should',
+                      'to', 'in', 'on', 'at', 'for', 'of', 'and', 'or', 'but', 'with', 'by',
+                      'this', 'that', 'these', 'those', 'it', 'its', 'been', 'being', 'have',
+                      'has', 'had', 'did', 'done', 'was', 'were', 'am', 'be', 'could', 'would'}
+        words = text.lower().replace('?', '').replace('.', '').replace(',', '').split()
+        key_words = [w for w in words if w not in stop_words and len(w) > 2]
+        return ' '.join(key_words[:6])  # Increased from 5 to 6
+
+    def _expand_with_synonyms(self, terms: str) -> str:
+        """Expand terms with common synonyms."""
+        synonyms = {
+            'big': 'large',
+            'small': 'little',
+            'fast': 'quick',
+            'slow': 'sluggish',
+            'good': 'excellent',
+            'bad': 'poor',
+            'start': 'begin',
+            'end': 'finish',
+            'make': 'create',
+            'use': 'utilize',
+            'find': 'discover',
+            'show': 'display',
+            'help': 'assist',
+            'best': 'top',
+            'new': 'latest',
+            'old': 'previous',
+        }
+
+        words = terms.lower().split()
+        expanded = []
+        for word in words:
+            expanded.append(word)
+            if word in synonyms:
+                expanded.append(synonyms[word])
+
+        return ' '.join(expanded[:8])  # Limit expansion
+
+    def _extract_entities(self, text: str) -> List[str]:
+        """Extract potential entities (capitalized words, numbers)."""
+        import re
+        # Find capitalized words (potential proper nouns)
+        entities = re.findall(r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b', text)
+        # Find numbers with context
+        numbers = re.findall(r'\b\d+(?:\.\d+)?(?:\s*(?:years?|days?|hours?|%|percent))?\b', text)
+        return list(set(entities + numbers))[:5]
+
+    def _extract_phrases(self, text: str) -> List[str]:
+        """Extract meaningful multi-word phrases."""
+        import re
+        # Remove question marks and normalize
+        text = text.replace('?', '').strip()
+
+        # Find 2-4 word sequences that look like meaningful phrases
+        words = text.split()
+        phrases = []
+
+        for i in range(len(words) - 1):
+            # 2-word phrases
+            phrase = ' '.join(words[i:i+2])
+            if len(phrase) > 5 and not any(w.lower() in ['the', 'a', 'an', 'is', 'are'] for w in words[i:i+2]):
+                phrases.append(phrase)
+
+            # 3-word phrases
+            if i < len(words) - 2:
+                phrase = ' '.join(words[i:i+3])
+                if len(phrase) > 8:
+                    phrases.append(phrase)
+
+        return phrases[:3]
+
+    def _rank_results(self, results: List[Dict], query: str, key_terms: str) -> List[Dict]:
+        """Rank search results by relevance to query."""
+        query_lower = query.lower()
+        terms = set(key_terms.lower().split())
+
+        scored_results = []
+        for r in results:
+            score = 0
+            snippet = r.get('snippet', '').lower()
+            title = r.get('title', '').lower()
+
+            # Exact query match in snippet
+            if query_lower[:30] in snippet:
+                score += 5
+
+            # Term matches in title (high value)
+            for term in terms:
+                if term in title:
+                    score += 3
+                if term in snippet:
+                    score += 1
+
+            # Source quality bonus
+            source = r.get('source', '')
+            if 'Wikipedia' in source:
+                score += 2
+            elif 'DuckDuckGo' in source:
+                score += 1
+
+            # Snippet length bonus (more content = potentially more useful)
+            if len(snippet) > 100:
+                score += 1
+
+            scored_results.append((r, score))
+
+        # Sort by score descending
+        scored_results.sort(key=lambda x: x[1], reverse=True)
+
+        return [r for r, _ in scored_results]
 
     def fetch_page(self, url: str) -> str:
         """Fetch and extract text from a webpage."""
@@ -147,12 +729,13 @@ class AutonomousAI:
     - Memory consolidation during "sleep"
     - Curiosity-driven learning
     - Metacognitive thought traces
+    - INTELLIGENT SEARCH: Analyzes failures and searches for solutions
     """
 
-    def __init__(self, model: str = "ministral-3:8b"):
+    def __init__(self, model: str = "zai-org/glm-4.7-flash"):
         print("\n[Initializing Cognitive Systems...]")
 
-        self.ai = CognitiveOllama(model=model)
+        self.ai = CognitiveLLM(model=model, backend="lmstudio")
         self.web = WebLearner()
         self.trainer = SelfTrainer()  # Curiosity-driven learning!
         self.active_learner = get_active_learner()  # Active learning module
@@ -166,6 +749,10 @@ class AutonomousAI:
         self.interests = []  # Topics the AI is interested in
         self.reflection_count = 0
 
+        # INTELLIGENT SEARCH: Track failed questions and generated queries
+        self.failed_questions = []  # Questions we got wrong
+        self.generated_search_queries = []  # AI-generated queries to find solutions
+
         # Emotion system
         self.emotions = None
         if EMOTION_AVAILABLE:
@@ -178,15 +765,21 @@ class AutonomousAI:
             self.sleep_system = SleepConsolidationSystem(dim=64)
             print("[Memory] Sleep consolidation system: ACTIVE")
 
-        # Benchmark for self-testing
-        self.benchmark = Benchmark()
-
         # Self-evolution system (no duplicates, learning cycles, MLX training)
         self.evolution = get_evolution()
         evo_stats = self.evolution.get_stats()
         print(f"[Evolution] Cycle {evo_stats['cycle']}, {evo_stats['total_facts']} unique facts learned")
         if evo_stats['trainings'] > 0:
             print(f"[Evolution] MLX trained {evo_stats['trainings']} times, improvement: {evo_stats['improvement']:+.1%}")
+
+        # Super Agent for intelligent web search
+        self.super_agent = None
+        if SUPER_AGENT_AVAILABLE:
+            self.super_agent = SuperAgent(
+                lm_studio_url="http://localhost:1234/v1",
+                model=model
+            )
+            print("[SuperAgent] Intelligent search + compare + decide: ACTIVE")
 
         # Conversation quality tracking (for confidence calibration)
         self.domain_outcomes: Dict[str, List[bool]] = {}
@@ -208,19 +801,19 @@ class AutonomousAI:
 
     def _autonomous_loop(self):
         """
-        Background loop with self-evolution:
-        1. Run initial benchmark
-        2. Learn 100 unique facts (no duplicates)
-        3. Re-benchmark
-        4. If improved 1%+ → MLX fine-tune
-        5. Reflect and repeat
+        Background loop for continuous self-learning:
+
+        1. Learn from conversations - extract knowledge from Q&A
+        2. Search and learn when AI doesn't know something
+        3. Self-correct when errors are detected
+        4. Periodically consolidate memory
+        5. Train model when enough data collected
         """
-        initial_benchmark_done = False
-        self.benchmark_results = None
-        self.weak_areas = []
+        self.pending_learnings = []  # Topics to learn about
+        self.error_corrections = []  # Errors to correct
 
         while self.running:
-            time.sleep(3)
+            time.sleep(5)
 
             if self.is_busy:
                 continue
@@ -229,437 +822,114 @@ class AutonomousAI:
             if not self.ai.history:
                 continue
 
-            # Step 1: Run INITIAL benchmark (once)
-            if not initial_benchmark_done:
-                self._run_benchmark_and_report("INITIAL")
-                initial_benchmark_done = True
+            # ═══════════════════════════════════════════════════════════
+            # CONTINUOUS LEARNING: Process pending learnings
+            # ═══════════════════════════════════════════════════════════
+            if self.pending_learnings:
+                self._process_pending_learning()
                 continue
 
-            # Step 2: Learn unique facts (checking for duplicates)
-            if not self.evolution.should_benchmark():
-                self._learn_unique_fact()
+            # ═══════════════════════════════════════════════════════════
+            # ERROR CORRECTION: Fix mistakes
+            # ═══════════════════════════════════════════════════════════
+            if self.error_corrections:
+                self._process_error_correction()
                 continue
 
-            # Step 3: After 100 unique facts → re-benchmark
-            print(f"\n[Evolution]: Learned {self.evolution.state['facts_this_cycle']} unique facts! Re-benchmarking...")
-            print("You: ", end="", flush=True)
-            self._run_benchmark_and_report("CYCLE")
-
-            # Step 4: Check if should train
-            should_train, reason = self.evolution.should_train(min_improvement=0.01)
-            print(f"\n[Evolution]: {reason}")
-
-            if should_train:
-                print(f"[Evolution]: Starting MLX fine-tuning on MacBook...")
+            # ═══════════════════════════════════════════════════════════
+            # PERIODIC: Check if training ready (every 100 facts)
+            # ═══════════════════════════════════════════════════════════
+            if self.evolution.should_benchmark():
+                evo_stats = self.evolution.get_stats()
+                print(f"\n[Evolution] {evo_stats['total_facts']} facts learned. Use /train to fine-tune model.")
                 print("You: ", end="", flush=True)
-                result = self.evolution.run_mlx_training()
-                if result['success']:
-                    print(f"\n[Evolution]: MLX TRAINING COMPLETE!")
-                    # After successful training, try to add new capabilities
-                    self._add_evolved_capability()
-                else:
-                    print(f"\n[Evolution]: Training skipped: {result['message']}")
-                print("You: ", end="", flush=True)
+                self.evolution.start_new_cycle()
 
-            # Step 5: Reflect and start new cycle
-            reflection = self.evolution.reflect()
-            print(f"\n{reflection}")
-            print("You: ", end="", flush=True)
+            # ═══════════════════════════════════════════════════════════
+            # IDLE: Memory consolidation
+            # ═══════════════════════════════════════════════════════════
+            if time.time() - self.last_interaction > 60:  # 1 minute idle
+                if hasattr(self.ai, 'memory') and self.ai.memory:
+                    try:
+                        self.ai.memory.consolidate()
+                    except:
+                        pass
 
-            self.evolution.start_new_cycle()
-            print(f"\n[Evolution]: Starting cycle {self.evolution.state['current_cycle']}...")
-            print("You: ", end="", flush=True)
-
-    def _run_benchmark_and_report(self, phase: str = ""):
-        """Run benchmark and record results in evolution system."""
-        self.is_busy = True
-        print(f"\n[Evolution]: Running {phase} benchmark...")
-        print("You: ", end="", flush=True)
-
-        try:
-            def think_fn(q):
-                # INJECT LEARNED KNOWLEDGE into the question!
-                # This is what makes learning actually help benchmarks
-                knowledge = self.trainer.get_knowledge_for_prompt(q)
-                if knowledge:
-                    enhanced_q = f"{knowledge}\n\nQuestion: {q}\nThink step by step and give the answer:"
-                else:
-                    enhanced_q = f"Question: {q}\nThink step by step and give the answer:"
-                return self.ai.chat(enhanced_q)
-
-            self.benchmark_results = self.benchmark.run_benchmark(think_fn)
-
-            # Find weak areas by category (below 70%)
-            category_scores = {}
-            for test in self.benchmark_results.get('tests', []):
-                cat = test.get('category', 'unknown')
-                score = test.get('score', 0) or 0
-                if cat not in category_scores:
-                    category_scores[cat] = []
-                category_scores[cat].append(score)
-
-            self.weak_areas = []
-            for cat, scores in category_scores.items():
-                avg = sum(scores) / len(scores) if scores else 0
-                if avg < 0.7:
-                    self.weak_areas.append((cat, avg))
-
-            avg_score = self.benchmark_results.get('avg_score', 0) or 0
-
-            # Record in evolution system
-            self.evolution.record_benchmark(avg_score, {
-                'weak_areas': [(c, s) for c, s in self.weak_areas],
-                'phase': phase
-            })
-
-            print(f"\n[Evolution]: {phase} Benchmark: {avg_score:.0%}")
-            if self.weak_areas:
-                weak_str = ", ".join([f"{a}: {s:.0%}" for a, s in self.weak_areas[:3]])
-                print(f"[Evolution]: Weak areas: {weak_str}")
-            print("You: ", end="", flush=True)
-
-        except Exception as e:
-            print(f"\n[Evolution]: Benchmark error: {e}")
-            print("You: ", end="", flush=True)
-
-        self.is_busy = False
-
-    def _learn_unique_fact(self):
-        """
-        Learn ONE TOPIC AT A TIME - go deep, reflect, then move on.
-
-        Cycle:
-        1. Pick a source (ArXiv, GitHub, Math, News)
-        2. Get multiple items from that source
-        3. Learn ALL unique items from it (go deep)
-        4. Reflect on what was learned
-        5. Move to next source
-        """
-        self.is_busy = True
-
-        # Track current learning focus
-        if not hasattr(self, '_current_focus'):
-            self._current_focus = None
-            self._focus_items = []
-            self._focus_learned = 0
-
-        # If no current focus or finished with it, pick new source
-        if not self._focus_items:
-            self._focus_items = self._fetch_news()
-            if self._focus_items:
-                self._current_focus = self._focus_items[0].get('source', 'Unknown')
-                self._focus_learned = 0
-                print(f"\n[Evolution]: === FOCUSING ON: {self._current_focus} ===")
-                print("You: ", end="", flush=True)
-            else:
-                self.is_busy = False
-                return
-
-        # Learn from current focus
-        learned_this_round = False
-        items_to_remove = []
-
-        for i, item in enumerate(self._focus_items[:3]):  # Try first 3
-            snippet = item.get('snippet', '')
-            url = item.get('url', '')
-            title = item.get('title', 'Item')[:60]
-            source = item.get('source', 'Unknown')
-
-            # Try to go INSIDE for full content
-            if url and 'arxiv' in url.lower():
-                # For ArXiv, try to get PDF content (model has vision)
-                full_content = self._fetch_article_content(url)
-                if full_content and len(full_content) > len(snippet):
-                    snippet = full_content
-
-            if not snippet or len(snippet) < 50:
-                items_to_remove.append(i)
-                continue
-
-            # CHECK FOR DUPLICATE
-            if self.evolution.is_duplicate(snippet):
-                items_to_remove.append(i)
-                continue
-
-            # GO INSIDE the URL to get FULL content (not just snippet)
-            if url and len(snippet) < 500:
-                full_content = self._fetch_full_page(url)
-                if full_content and len(full_content) > len(snippet):
-                    snippet = full_content
-
-            if not snippet or len(snippet) < 100:
-                items_to_remove.append(i)
-                continue
-
-            # ANALYZE with Ministral - extract knowledge as JSON
-            analyzed = self._analyze_content_with_model(title, snippet, source)
-
-            if not analyzed:
-                items_to_remove.append(i)
-                continue
-
-            # Check for duplicate (use analyzed summary)
-            if self.evolution.is_duplicate(analyzed.get('summary', snippet)):
-                items_to_remove.append(i)
-                continue
-
-            # Learn the ANALYZED content!
-            if self.evolution.mark_learned(analyzed.get('summary', '')):
-                # Save structured knowledge
-                self.trainer.learn(
-                    analyzed.get('topic', title),
-                    analyzed.get('knowledge', snippet[:1000]),
-                    source
-                )
-                self._focus_learned += 1
-
-                # Save as training Q&A pairs
-                self._save_analyzed_as_training(analyzed, source)
-
-                stats = self.evolution.get_stats()
-                print(f"\n[Evolution]: ANALYZED [{stats['facts_this_cycle']}/100] [{source}]")
-                print(f"             Topic: {analyzed.get('topic', 'N/A')}")
-                print(f"             Key facts: {len(analyzed.get('facts', []))}")
-                print(f"             Q&A pairs: {len(analyzed.get('qa_pairs', []))}")
-                print("You: ", end="", flush=True)
-
-                items_to_remove.append(i)
-                learned_this_round = True
-                break  # One at a time
-
-        # Remove processed items
-        for i in sorted(items_to_remove, reverse=True):
-            if i < len(self._focus_items):
-                self._focus_items.pop(i)
-
-        # If focus exhausted, reflect and move on
-        if not self._focus_items:
-            if self._focus_learned > 0:
-                print(f"\n[Evolution]: === REFLECTION on {self._current_focus} ===")
-                print(f"             Learned {self._focus_learned} unique facts from {self._current_focus}")
-                print(f"             Moving to next source...")
-                print("You: ", end="", flush=True)
-            self._current_focus = None
-            self._focus_learned = 0
-
-        self.is_busy = False
-
-    def _categorize_content(self, content: str) -> str:
-        """Categorize content by keywords."""
-        content_lower = content.lower()
-
-        categories = {
-            'TECH': ['technology', 'software', 'computer', 'ai', 'robot', 'digital', 'app', 'internet'],
-            'SCIENCE': ['research', 'study', 'scientist', 'discovery', 'experiment', 'physics', 'biology'],
-            'HEALTH': ['health', 'medical', 'doctor', 'hospital', 'disease', 'treatment', 'vaccine'],
-            'BUSINESS': ['market', 'stock', 'company', 'economy', 'business', 'trade', 'finance'],
-            'WORLD': ['country', 'government', 'president', 'minister', 'nation', 'international'],
-            'SPORTS': ['game', 'team', 'player', 'match', 'score', 'championship', 'league'],
-            'CULTURE': ['film', 'music', 'art', 'book', 'movie', 'show', 'entertainment'],
-        }
-
-        for cat, keywords in categories.items():
-            if any(kw in content_lower for kw in keywords):
-                return cat
-
-        return 'GENERAL'
-
-    def _add_evolved_capability(self):
-        """Add a new function based on what was learned."""
-        # Generate new capabilities based on weak areas
-        if not self.weak_areas:
+    def _process_pending_learning(self):
+        """Process one pending learning topic by searching and storing knowledge."""
+        if not self.pending_learnings:
             return
 
-        weak_topic, _ = self.weak_areas[0]
+        self.is_busy = True
+        topic = self.pending_learnings.pop(0)
 
-        # Define helper functions for each weak area
-        capability_templates = {
-            'math': (
-                'solve_basic_math',
-                '''def solve_basic_math(expression: str) -> str:
-    """Solve basic math expressions."""
-    try:
-        # Safe evaluation of math expressions
-        allowed = set('0123456789+-*/().% ')
-        if all(c in allowed for c in expression):
-            result = eval(expression)
-            return f"{expression} = {result}"
-        return "Cannot evaluate: contains unsafe characters"
-    except Exception as e:
-        return f"Error: {e}"
-''',
-                'Safely evaluate basic math expressions'
-            ),
-            'logic': (
-                'check_logic',
-                '''def check_logic(premise1: str, premise2: str, conclusion: str) -> str:
-    """Simple logical consistency checker."""
-    # Keywords that indicate logical relationships
-    if "all" in premise1.lower() and "is a" in premise2.lower():
-        return f"If '{premise1}' and '{premise2}', then '{conclusion}' follows by syllogism."
-    return f"Analyzing: {premise1} + {premise2} -> {conclusion}"
-''',
-                'Check basic logical syllogisms'
-            ),
-            'reasoning': (
-                'step_by_step',
-                '''def step_by_step(problem: str) -> list:
-    """Break down a problem into steps."""
-    steps = [
-        f"1. Understand the problem: {problem[:50]}...",
-        "2. Identify key information",
-        "3. Determine what we need to find",
-        "4. Choose a strategy",
-        "5. Execute and verify"
-    ]
-    return steps
-''',
-                'Break problems into reasoning steps'
-            ),
-        }
-
-        if weak_topic in capability_templates:
-            name, code, description = capability_templates[weak_topic]
-
-            # Check if already added
-            existing = [f['name'] for f in self.evolution.state['added_functions']]
-            if name not in existing:
-                if self.evolution.add_function(name, code, description):
-                    print(f"\n[Evolution]: Added new capability: {name} ({description})")
-                    print("You: ", end="", flush=True)
-
-    def _fetch_news(self) -> List[Dict]:
-        """
-        PARALLEL FETCHING - fetch from multiple sources at once!
-
-        Uses ThreadPoolExecutor to fetch in parallel (much faster).
-        """
-        all_items = []
-
-        # Learning order - cycle through systematically
-        if not hasattr(self, '_learning_order_idx'):
-            self._learning_order_idx = 0
-
-        learning_order = ['math', 'logic', 'arxiv', 'gdelt', 'code', 'science']  # Ministral fetches everything
-        source_type = learning_order[self._learning_order_idx % len(learning_order)]
-        self._learning_order_idx += 1
-
-        # Define fetch tasks
-        def fetch_math():
-            return self._learn_from_benchmark('math')
-
-        def fetch_logic():
-            return self._learn_from_benchmark('logic')
-
-        def fetch_arxiv():
-            categories = ['cs.AI', 'cs.LG', 'cs.CL', 'math.CO', 'math.LO', 'stat.ML']
-            cat = random.choice(categories)
-            url = f'http://export.arxiv.org/api/query?search_query=cat:{cat}&start={random.randint(0,50)}&max_results=10&sortBy=submittedDate&sortOrder=descending'
-            return self._fetch_arxiv(url)
-
-        def fetch_code():
-            url = f'https://api.github.com/search/repositories?q={random.choice(["algorithm", "machine-learning", "data-structure", "framework"])}+stars:>500&sort=stars&per_page=10'
-            return self._fetch_github(url)
-
-        def fetch_science():
-            return self._fetch_rss('https://www.sciencedaily.com/rss/all.xml', 'ScienceDaily')
-
-        def fetch_gdelt():
-            # GDELT finds articles, then Ministral fetches full content
-            return self._fetch_gdelt_and_learn()
-
-        # Map source types to fetch functions - ALL done by Ministral
-        fetch_map = {
-            'math': fetch_math,
-            'logic': fetch_logic,
-            'arxiv': fetch_arxiv,
-            'code': fetch_code,
-            'science': fetch_science,
-            'gdelt': fetch_gdelt,
-        }
-
-        # PARALLEL MODE: Fetch from ALL sources at once every 5th cycle
-        if self._learning_order_idx % 5 == 0:
-            print(f"\n[Evolution]: === PARALLEL FETCH (all sources) ===")
+        try:
+            print(f"\n[Learning] Researching: {topic[:50]}...")
             print("You: ", end="", flush=True)
 
-            with ThreadPoolExecutor(max_workers=5) as executor:
-                futures = {executor.submit(fn): name for name, fn in fetch_map.items()}
+            # Search for information
+            results = self.web.smart_search(topic, "general")
 
-                for future in as_completed(futures, timeout=60):
-                    source_name = futures[future]
-                    try:
-                        items = future.result(timeout=10)  # Individual timeout
-                        if items:
-                            all_items.extend(items[:3])  # Take top 3 from each
-                    except Exception as e:
-                        pass  # Skip failed sources
+            if results:
+                # Extract and store knowledge
+                for r in results[:3]:
+                    snippet = r.get('snippet', '')
+                    if snippet and not self.evolution.is_duplicate(snippet):
+                        self.trainer.learn(topic[:50], snippet[:500], r.get('source', 'web'))
+                        self.evolution.mark_learned(snippet[:200])
 
-            if all_items:
-                random.shuffle(all_items)  # Mix them up
-                return all_items
+                print(f"[Learning] ✓ Learned about: {topic[:40]}")
+            else:
+                print(f"[Learning] No results for: {topic[:40]}")
 
-        # SEQUENTIAL MODE: Focus on one source type
-        try:
-            fetch_fn = fetch_map.get(source_type)
-            if fetch_fn:
-                all_items = fetch_fn()
+            print("You: ", end="", flush=True)
         except Exception as e:
-            pass
+            print(f"[Learning] Error: {e}")
+            print("You: ", end="", flush=True)
 
-        return all_items
+        self.is_busy = False
 
-    def _learn_from_benchmark(self, category: str) -> List[Dict]:
-        """
-        Learn from BENCHMARK with ACTUAL CORRECT ANSWERS!
-        Not just searching - we teach the model the right answer.
-        """
-        items = []
+    def _process_error_correction(self):
+        """Process and learn from an error correction."""
+        if not self.error_corrections:
+            return
 
-        benchmark_questions = [t for t in self.benchmark.tests if t.get('category') == category]
-        if not benchmark_questions:
-            benchmark_questions = self.benchmark.tests
+        self.is_busy = True
+        error = self.error_corrections.pop(0)
 
-        test = random.choice(benchmark_questions)
-        question = test['question']
-        answer = test.get('answer', '')
-        keywords = test.get('expected_keywords', [])
+        try:
+            question = error.get('question', '')
+            correct_answer = error.get('correct_answer', '')
+            wrong_answer = error.get('wrong_answer', '')
 
-        print(f"\n[Evolution]: STUDYING: {question[:50]}... (answer: {answer})")
-        print("You: ", end="", flush=True)
+            print(f"\n[Self-Correction] Learning from mistake...")
+            print("You: ", end="", flush=True)
 
-        # TEACH the correct answer with step-by-step reasoning
-        explanations = {
-            "apples for $2": f"Calculate: 5 × $2 = $10. Change: $20 - $10 = $10. Answer: 10",
-            "60 mph": f"Distance = Speed × Time = 60 × 2.5 = 150 miles. Answer: 150",
-            "length 8 and width 5": f"Area = 8 × 5 = 40. Answer: 40",
-            "cats are mammals": f"Syllogism: cats→mammals→animals. Therefore cats are animals. Answer: yes",
-            "rains, the ground gets wet": f"Affirming consequent fallacy. Wet ground ≠ rain (could be sprinklers). Answer: no",
-            "ice cream in the oven": f"400°F melts and burns ice cream. Answer: melts",
-            "17 sheep. All but 9": f"'All but 9' = 9 remain. Answer: 9",
-            "3 apples and you take away 2": f"YOU took 2, so YOU have 2. Answer: 2",
-            "twice as old as Bob": f"Alice = 2×15 = 30. In 5 years = 35. Answer: 35",
-            "marble in her basket": f"Sally thinks marble is where SHE put it. Answer: basket",
-            "John thinks that Mary": f"John believes Mary thinks rain. Answer: rain",
-            "cookies put in a blue jar": f"Child will look where they SAW it. Answer: blue",
-        }
+            # Store the correction as training data
+            content = f"Q: {question}\nCorrect: {correct_answer}\nWrong: {wrong_answer}"
+            self.trainer.learn(f"correction: {question[:30]}", content, "self-correction")
+            self.evolution.mark_learned(content[:200])
 
-        explanation = f"Answer: {answer}. Keywords: {', '.join(keywords[:3])}"
-        for key, exp in explanations.items():
-            if key.lower() in question.lower():
-                explanation = exp
-                break
+            print(f"[Self-Correction] ✓ Learned correction")
+            print("You: ", end="", flush=True)
+        except Exception as e:
+            print(f"[Self-Correction] Error: {e}")
+            print("You: ", end="", flush=True)
 
-        qa_content = f"Question: {question}\n\nStep-by-step solution:\n{explanation}\n\nFINAL ANSWER: {answer}"
+        self.is_busy = False
 
-        items.append({
-            'title': f"[{category.upper()}] {answer}",
-            'snippet': qa_content,
-            'url': '',
-            'source': f'Benchmark-{category}'
+    def add_learning_topic(self, topic: str):
+        """Add a topic to learn about in the background."""
+        if topic and topic not in self.pending_learnings:
+            self.pending_learnings.append(topic)
+
+    def add_error_correction(self, question: str, correct_answer: str, wrong_answer: str):
+        """Add an error to correct and learn from."""
+        self.error_corrections.append({
+            'question': question,
+            'correct_answer': correct_answer,
+            'wrong_answer': wrong_answer
         })
-
-        return items
 
     def _fetch_wikipedia(self, topic: str, source: str) -> List[Dict]:
         """Fetch from Wikipedia API."""
@@ -849,7 +1119,7 @@ class AutonomousAI:
         """
         items = []
 
-        # Search for EXPERT content based on weak areas from benchmark
+        # Search for EXPERT content based on weak areas from learning
         weak_area = None
         if hasattr(self, 'weak_areas') and self.weak_areas:
             weak_area = random.choice(self.weak_areas)[0]
@@ -1051,11 +1321,66 @@ class AutonomousAI:
         except Exception as e:
             return None
 
+    def _extract_methodology_and_apply(self, content: str, source: str) -> Optional[Dict]:
+        """
+        INTELLIGENT LEARNING: Extract METHODOLOGY from paper/code and create training data
+        that teaches HOW TO SOLVE problems, not just facts.
+        """
+        # Get a failed question to apply the methodology to
+        if not hasattr(self, 'failed_questions') or not self.failed_questions:
+            return None
+
+        failed = random.choice(self.failed_questions)
+
+        try:
+            extract_prompt = f"""Read this content and extract the PROBLEM-SOLVING METHOD it describes:
+
+CONTENT: {content[:1500]}
+
+Now apply this method to solve this problem:
+QUESTION: {failed['question']}
+CORRECT ANSWER: {failed['correct_answer']}
+
+Create a step-by-step solution using the methodology from the content.
+Format your response as:
+METHOD: [name of the technique]
+STEPS:
+1. [step 1]
+2. [step 2]
+...
+ANSWER: {failed['correct_answer']}"""
+
+            response = self.ai.chat(extract_prompt)
+
+            # Create training data with methodology
+            return {
+                'topic': f"Method for {failed['category']}",
+                'summary': f"Methodology to solve {failed['category']} problems",
+                'facts': [f"Use this method: {response[:300]}"],
+                'qa_pairs': [{
+                    'q': failed['question'],
+                    'a': f"<think>\n{response}\n</think>\n\nFINAL ANSWER: {failed['correct_answer']}"
+                }],
+                'knowledge': response[:800],
+                'source': source
+            }
+
+        except Exception as e:
+            return None
+
     def _analyze_content_with_model(self, title: str, content: str, source: str) -> Optional[Dict]:
         """
-        Use Ministral to ANALYZE content and extract structured knowledge.
-        Returns JSON with topic, facts, Q&A pairs.
+        Use the model to ANALYZE content and extract structured knowledge.
+        For ArXiv/GitHub sources, try to extract METHODOLOGY first.
         """
+        # For research papers and code, try methodology extraction
+        if source in ['ArXiv', 'GitHub'] or 'arxiv' in source.lower():
+            methodology = self._extract_methodology_and_apply(content, source)
+            if methodology and methodology.get('qa_pairs'):
+                print(f"\n[INTELLIGENT]: Extracted methodology from {source}!")
+                print("You: ", end="", flush=True)
+                return methodology
+
         try:
             # Shorter prompt for faster/cleaner response
             prompt = f"""Extract key knowledge from this text. Be concise.
@@ -1281,7 +1606,7 @@ JSON:"""
     def _self_improve(self) -> Optional[str]:
         """Actually DO self-improvement tasks and SHOW what was learned."""
 
-        # Priority 1: Fix WEAK AREAS from benchmark
+        # Priority 1: Fix WEAK AREAS from learning history
         if hasattr(self, 'weak_areas') and self.weak_areas:
             weak_topic, weak_score = random.choice(self.weak_areas)
             search_queries = {
@@ -1469,6 +1794,77 @@ JSON:"""
 
         return None
 
+    def _learn_topic_from_internet(self, topic: str) -> str:
+        """
+        Learn ANY topic from the internet!
+        Searches for: similar examples, how it works, tutorials, explanations.
+        """
+        learned_info = []
+
+        print(f"\n[Learning]: Researching '{topic[:50]}' from internet...")
+        print("You: ", end="", flush=True)
+
+        # 1. Search for WHAT IT IS
+        what_results = self.web.search_web(f"what is {topic}")
+        if what_results and not what_results[0].get('error'):
+            for r in what_results[:2]:
+                if r.get('snippet') and len(r['snippet']) > 50:
+                    learned_info.append(f"[Definition]: {r['snippet']}")
+
+        # 2. Search for HOW IT WORKS
+        how_results = self.web.search_web(f"how does {topic} work explained")
+        if how_results and not how_results[0].get('error'):
+            for r in how_results[:2]:
+                if r.get('snippet') and len(r['snippet']) > 50:
+                    learned_info.append(f"[How it works]: {r['snippet']}")
+
+        # 3. Search for EXAMPLES
+        example_results = self.web.search_web(f"{topic} examples tutorial")
+        if example_results and not example_results[0].get('error'):
+            for r in example_results[:2]:
+                if r.get('snippet') and len(r['snippet']) > 50:
+                    learned_info.append(f"[Examples]: {r['snippet']}")
+
+        # 4. Search for SIMILAR things
+        similar_results = self.web.search_web(f"{topic} similar related concepts")
+        if similar_results and not similar_results[0].get('error'):
+            for r in similar_results[:1]:
+                if r.get('snippet') and len(r['snippet']) > 50:
+                    learned_info.append(f"[Related]: {r['snippet']}")
+
+        # Save what we learned
+        if learned_info:
+            full_knowledge = "\n".join(learned_info)
+
+            # Save to trainer
+            self.trainer.learn(topic, full_knowledge[:1500], 'internet-research')
+
+            # Save as training data
+            training_file = os.path.expanduser("~/.cognitive_ai_knowledge/training_data.jsonl")
+            os.makedirs(os.path.dirname(training_file), exist_ok=True)
+
+            # Create Q&A pairs from learned info
+            qa_pairs = [
+                {"prompt": f"What is {topic}?", "completion": learned_info[0] if learned_info else ""},
+                {"prompt": f"How does {topic} work?", "completion": learned_info[1] if len(learned_info) > 1 else ""},
+                {"prompt": f"Give me examples of {topic}", "completion": learned_info[2] if len(learned_info) > 2 else ""},
+            ]
+
+            with open(training_file, 'a') as f:
+                for qa in qa_pairs:
+                    if qa['completion']:
+                        f.write(json.dumps(qa) + '\n')
+
+            # Mark as learned in evolution
+            self.evolution.mark_learned(full_knowledge[:500])
+
+            print(f"[Learning]: ✓ Learned {len(learned_info)} facts about '{topic[:30]}'")
+            print("You: ", end="", flush=True)
+
+            return full_knowledge
+
+        return ""
+
     def chat(self, user_input: str) -> str:
         """Process user input with full cognitive architecture."""
         self.last_interaction = time.time()
@@ -1480,6 +1876,62 @@ JSON:"""
             self.interests.append(clean_input)
             if len(self.interests) > 20:
                 self.interests = self.interests[-20:]
+
+        # ══════════════════════════════════════════════════════════════
+        # SUPER AGENT: Detect search commands and use intelligent search
+        # ══════════════════════════════════════════════════════════════
+        search_triggers = [
+            'search on arxiv', 'search arxiv', 'find on arxiv',
+            'search on github', 'search github', 'find on github',
+            'search the web', 'search internet', 'search for',
+            'find the best', 'find best code', 'look up',
+            'research', 'deep search'
+        ]
+
+        if self.super_agent and any(trigger in clean_input for trigger in search_triggers):
+            print("\n[SuperAgent] Detected search request - using intelligent search...")
+
+            # Extract the search query
+            query = clean_input
+            for trigger in search_triggers:
+                query = query.replace(trigger, '').strip()
+
+            if query:
+                # Determine which sources to search
+                sources = ['web', 'arxiv', 'github']
+                if 'arxiv' in clean_input:
+                    sources = ['arxiv']
+                elif 'github' in clean_input:
+                    sources = ['github']
+
+                # Use Super Agent
+                if 'best code' in clean_input or 'best' in clean_input and 'github' in clean_input:
+                    result = self.super_agent.find_best_code(query)
+                else:
+                    result = self.super_agent.fast_search(query, sources=sources)
+
+                # Format response
+                if result.get('best_repo'):
+                    repo = result['best_repo']
+                    return f"""[SuperAgent Search Complete]
+
+Best Repository: {repo.get('name', 'Unknown')}
+URL: {repo.get('url', '')}
+Score: {repo.get('score', 0)}/10
+
+{result.get('analysis', '')[:500]}
+
+Training data saved for fine-tuning."""
+
+                else:
+                    return f"""[SuperAgent Search Complete]
+
+{result.get('analysis', 'Search completed.')}
+
+Confidence: {result.get('confidence', 0)}/10
+Results found: {len(result.get('results', []))}
+
+Training data saved for fine-tuning."""
 
         # Boost curiosity for this topic
         self.active_learner.boost_curiosity(clean_input[:50], 0.1)
@@ -1496,8 +1948,14 @@ JSON:"""
             # Apply curiosity emotion for learning topics
             self.emotions.add_emotion(BasicEmotion.CURIOSITY, 0.3)
 
-        # RETRIEVE trained knowledge
-        knowledge = self.trainer.get_knowledge_for_prompt(user_input)
+        # RETRIEVE trained knowledge - but only for actual questions, not meta-requests
+        knowledge = ""
+        meta_phrases = ['improve', 'yourself', 'your reasoning', 'get better', 'learn more',
+                        'train', 'upgrade', 'enhance yourself', 'self improve']
+        is_meta_request = any(phrase in clean_input.lower() for phrase in meta_phrases)
+
+        if not is_meta_request:
+            knowledge = self.trainer.get_knowledge_for_prompt(user_input)
 
         # Check if we should actively learn about this
         should_learn, priority, reason = self.active_learner.should_learn(clean_input[:50])
@@ -1513,6 +1971,41 @@ JSON:"""
 
         # Get response
         response = self.ai.chat(enhanced_input)
+
+        # CHECK IF MODEL DOESN'T KNOW - then search internet!
+        dont_know_phrases = [
+            "i don't know", "i do not know", "i'm not sure", "i am not sure",
+            "i cannot", "i can't", "unable to", "don't have information",
+            "no information", "not familiar", "beyond my knowledge",
+            "i lack", "insufficient", "cannot provide", "can't provide",
+            "not aware", "unclear", "uncertain", "i apologize"
+        ]
+
+        response_lower = str(response).lower()  # Ensure string
+        doesnt_know = any(phrase in response_lower for phrase in dont_know_phrases)
+
+        # Also check if response is too short (likely doesn't know)
+        if len(response.strip()) < 50:
+            doesnt_know = True
+
+        if doesnt_know:
+            print(f"\n[AI doesn't know]: Searching internet for answer...")
+            print("You: ", end="", flush=True)
+
+            # Extract topic from user input
+            topic = clean_input
+            for trigger in ['what is', 'how does', 'explain', 'tell me about', 'learn about', 'teach me', 'how to']:
+                topic = topic.replace(trigger, '').strip()
+
+            if topic and len(topic) > 3:
+                # Learn from internet
+                learned = self._learn_topic_from_internet(topic)
+
+                if learned:
+                    # Try again with new knowledge!
+                    enhanced_with_learned = f"{user_input}\n\nI found this information:\n{learned[:1000]}"
+                    response = self.ai.chat(enhanced_with_learned)
+                    response = f"[After researching]: {response}"
 
         # Record exposure for active learning
         self.active_learner.record_exposure(
@@ -1626,16 +2119,17 @@ Commands:
   /interests       - Show AI's interests
   /thoughts        - Show recent thoughts
   /emotions        - Show emotional state (blended VAD)
-  /benchmark       - Run cognitive tests (ToM, creativity, social)
   /sleep           - Trigger memory consolidation
   /learn           - Show curiosity & learning stats
   /evolution       - Show self-evolution stats (cycles, training, improvement)
+  /train           - Run MLX fine-tuning manually
+  /evolve population [n]  - Run population-based code evolution (n generations)
   /quit            - Exit
 """)
     print("=" * 60)
 
-    model = sys.argv[1] if len(sys.argv) > 1 else "ministral-3:8b"
-    print(f"\nModel: {model}")
+    model = sys.argv[1] if len(sys.argv) > 1 else "zai-org/glm-4.7-flash"
+    print(f"\nModel: {model} (LM Studio)")
     print("Loading...")
 
     ai = AutonomousAI(model=model)
@@ -1725,24 +2219,6 @@ Commands:
                 print()
                 continue
 
-            if user_input == '/benchmark':
-                print(f"\n--- Running Cognitive Benchmarks ---")
-                print("Testing: Theory of Mind, Creativity, Social Intelligence...")
-
-                def simple_think(q):
-                    return ai.ai.chat(q)
-
-                results = ai.benchmark.run_all(simple_think)
-
-                print(f"\nResults:")
-                print(f"  Overall Score: {results['overall']:.1%}")
-                print(f"  Theory of Mind: {results.get('theory_of_mind', 0):.1%}")
-                print(f"  Creativity: {results.get('creativity', 0):.1%}")
-                print(f"  Social Intelligence: {results.get('social_intelligence', 0):.1%}")
-                print(f"  Reasoning: {results.get('reasoning', 0):.1%}")
-                print()
-                continue
-
             if user_input == '/sleep':
                 print(f"\n--- Triggering Sleep Consolidation ---")
                 if ai.sleep_system:
@@ -1822,6 +2298,99 @@ Commands:
                     print(f"\nRecent Improvements:")
                     for imp in evo.state['improvements'][-3:]:
                         print(f"  Cycle {imp['cycle']}: +{imp['improvement']:.1%}")
+
+                print()
+                continue
+
+            if user_input == '/train':
+                print(f"\n--- Manual MLX Training ---")
+                evo = ai.evolution
+                evo_stats = evo.get_stats()
+                print(f"Facts learned: {evo_stats['total_facts']}")
+
+                # Run MLX training
+                print(f"\n[Training]: Fine-tuning model with MLX...")
+                result = evo.run_mlx_training()
+                if result['success']:
+                    print(f"[Training]: COMPLETE!")
+                    # Reflect
+                    reflection = evo.reflect()
+                    print(f"\n{reflection}")
+                else:
+                    print(f"[Training]: {result['message']}")
+                print()
+                continue
+
+            if user_input.startswith('/evolve population'):
+                print(f"\n--- Population-Based Code Evolution ---")
+
+                if not CODE_EVOLUTION_AVAILABLE:
+                    print("Code evolution system not available.")
+                    print()
+                    continue
+
+                # Parse optional generations argument
+                parts = user_input.split()
+                generations = 1
+                if len(parts) > 2:
+                    try:
+                        generations = int(parts[2])
+                    except ValueError:
+                        print(f"Invalid generations number: {parts[2]}, using 1")
+
+                # Get or create code evolution instance with population enabled
+                code_evo = get_code_evolution()
+
+                # Check if population is enabled
+                if not code_evo.use_population:
+                    print("Population evolution not enabled on current instance.")
+                    print("Creating new instance with population enabled...")
+                    # Create new instance with population enabled
+                    from config.paths import EVOLUTION_DIR
+                    code_evo = CodeEvolution(
+                        storage_dir=EVOLUTION_DIR / "code_evolution",
+                        use_docker=True,
+                        use_population=True
+                    )
+
+                # Show current population stats
+                pop_stats = code_evo.get_population_stats()
+                if pop_stats.get('enabled'):
+                    print(f"\nCurrent Population:")
+                    print(f"  Generation: {pop_stats['generation']}")
+                    print(f"  Population size: {pop_stats['population_size']}")
+                    print(f"  Diversity: {pop_stats['diversity']:.4f}")
+                    print(f"  Convergence: {pop_stats['convergence']:.4f}")
+                    print(f"  Best fitness: {pop_stats['best_fitness']:.4f}")
+                    print(f"  Avg fitness: {pop_stats['avg_fitness']:.4f}")
+
+                    if pop_stats['population_size'] > 0:
+                        # Run evolution
+                        print(f"\nEvolving for {generations} generation(s)...")
+                        result = code_evo.evolve_population(generations=generations)
+
+                        if result['success']:
+                            final = result['final_stats']
+                            print(f"\nEvolution Complete!")
+                            print(f"  Generations evolved: {result['generations_evolved']}")
+                            print(f"  Final generation: {final['generation']}")
+                            print(f"  Best fitness: {final['best_fitness']:.4f}")
+                            print(f"  Avg fitness: {final['avg_fitness']:.4f}")
+                            print(f"  Diversity: {final['diversity']:.4f}")
+
+                            # Show best individuals
+                            if final.get('best_individuals'):
+                                print(f"\nTop Individuals:")
+                                for ind in final['best_individuals'][:3]:
+                                    mutations = ', '.join(ind['mutations']) if ind['mutations'] else 'none'
+                                    print(f"    {ind['id'][:8]}... fitness={ind['fitness']:.4f} (gen {ind['generation']}, mutations: {mutations})")
+                        else:
+                            print(f"Evolution failed: {result.get('message', 'Unknown error')}")
+                    else:
+                        print("\nPopulation is empty. Add code via propose_change first.")
+                        print("Example: Use the code evolution API to propose code changes.")
+                else:
+                    print("Population evolution not available.")
 
                 print()
                 continue

@@ -70,13 +70,14 @@ Maintain multiple code variants and evolve the best ones (like Darwin Godel Mach
   - Mutations should preserve code correctness (validate after each)
   - **Completed 2026-02-03**: Implemented `CodeMutator` class with all 5 mutation types: `ParameterMutation` (changes numeric constants by +/-50%), `StructureMutation` (swaps if/else branches), `OperatorMutation` (swaps +/-, *//, and/or, ==/!=), `SimplificationMutation` (removes dead code like x+0), `ExpansionMutation` (adds type hints). All mutations use AST parsing, modification, unparsing, and validation.
 
-- [ ] Integrate population evolution into `integrations/code_evolution.py`:
+- [x] Integrate population evolution into `integrations/code_evolution.py`:
   - Add `use_population: bool = False` parameter to `CodeEvolution.__init__()`
   - When proposing change, also generate 3-5 variants using mutations
   - Test all variants in sandbox, keep best performing
   - Track lineage: which variants came from which parents
   - Add `get_population_stats()` method showing diversity and convergence
   - Add `/evolve population` command in chat.py to trigger population evolution
+  - **Completed 2026-02-03**: Integrated population evolution into CodeEvolution. Added `use_population` parameter to `__init__()`, updated `propose_change()` to generate 3-5 variants via mutations when population enabled, test all variants and select best by fitness, track full lineage via Population.get_lineage(), added `get_population_stats()` returning diversity/convergence/fitness metrics, added `evolve_population()` for multi-generation evolution, and added `/evolve population [n]` command in chat.py. All 41 tests pass (17 code_evolution + 24 population_evolution).
 
 ---
 

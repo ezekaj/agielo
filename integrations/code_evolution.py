@@ -42,6 +42,19 @@ except ImportError:
     _docker_sandbox = None
     DockerSandbox = None
 
+# Import population evolution for genetic algorithm-style code improvement
+try:
+    from integrations.population_evolution import (
+        Population, CodeIndividual, CodeMutator, MutationType
+    )
+    POPULATION_AVAILABLE = True
+except ImportError:
+    POPULATION_AVAILABLE = False
+    Population = None
+    CodeIndividual = None
+    CodeMutator = None
+    MutationType = None
+
 
 class CodeChangeType(Enum):
     """Types of code modifications."""
@@ -798,17 +811,37 @@ class CodeEvolution:
     - Sandbox testing (Docker preferred, Python fallback)
     - Deployment with rollback capability
     - Self-introspection (reading own code)
+    - Population-based evolution (genetic algorithm style)
     """
 
-    def __init__(self, storage_dir: Path = None, use_docker: bool = True):
+    def __init__(self, storage_dir: Path = None, use_docker: bool = True, use_population: bool = False):
         self.storage_dir = storage_dir or EVOLUTION_DIR / "code_evolution"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.use_docker = use_docker
+        self.use_population = use_population and POPULATION_AVAILABLE
 
         self.validator = CodeValidator(use_docker=use_docker)
         self.sandbox = CodeSandbox(self.storage_dir / "sandbox", use_docker=use_docker)
         self.version_control = CodeVersionControl(self.storage_dir / "versions")
         self.introspector = CodeIntrospector()  # For reading own source code
+
+        # Population-based evolution system
+        self.population: Optional['Population'] = None
+        self.mutator: Optional['CodeMutator'] = None
+        if self.use_population:
+            self.population = Population(
+                max_size=20,
+                elite_size=3,
+                tournament_size=3,
+                mutation_rate=0.3,
+                crossover_rate=0.7,
+                storage_dir=self.storage_dir / "population"
+            )
+            self.mutator = CodeMutator()
+            print("[CodeEvolution] Population-based evolution: ENABLED")
+        else:
+            if use_population and not POPULATION_AVAILABLE:
+                print("[CodeEvolution] Population evolution requested but not available")
 
         # Log sandbox configuration
         print(f"[CodeEvolution] Initialized with Docker {'enabled' if use_docker else 'disabled'}")
@@ -885,10 +918,14 @@ class CodeEvolution:
         new_code: str,
         description: str,
         target_file: str = None,
-        original_code: str = None
+        original_code: str = None,
+        test_cases: List[Dict] = None
     ) -> CodeChange:
         """
         Propose a code change for validation and testing.
+
+        When population evolution is enabled, generates 3-5 variants using mutations,
+        tests all variants, and keeps the best performing one.
 
         Args:
             change_type: Type of change
@@ -896,10 +933,31 @@ class CodeEvolution:
             description: Human-readable description
             target_file: File to modify (optional for new functions)
             original_code: Original code being replaced (for modifications)
+            test_cases: Optional test cases for variant evaluation
 
         Returns:
-            CodeChange object with validation results
+            CodeChange object with validation results (best variant if population enabled)
         """
+        # If population evolution is enabled, generate and test variants
+        if self.use_population and self.population and self.mutator:
+            return self._propose_change_with_population(
+                change_type, new_code, description, target_file, original_code, test_cases
+            )
+
+        # Standard single-variant proposal
+        return self._propose_change_single(
+            change_type, new_code, description, target_file, original_code
+        )
+
+    def _propose_change_single(
+        self,
+        change_type: CodeChangeType,
+        new_code: str,
+        description: str,
+        target_file: str = None,
+        original_code: str = None
+    ) -> CodeChange:
+        """Standard single-variant change proposal."""
         # Generate change ID
         change_id = hashlib.md5(
             f"{new_code}{datetime.now().isoformat()}".encode()
@@ -932,6 +990,132 @@ class CodeEvolution:
                 print(f"[CodeEvolution] Change {change_id} failed sandbox testing: {test_results['errors']}")
         else:
             print(f"[CodeEvolution] Change {change_id} validation failed: {message}")
+
+        return change
+
+    def _propose_change_with_population(
+        self,
+        change_type: CodeChangeType,
+        new_code: str,
+        description: str,
+        target_file: str = None,
+        original_code: str = None,
+        test_cases: List[Dict] = None
+    ) -> CodeChange:
+        """
+        Propose a code change using population-based evolution.
+
+        Generates 3-5 variants using mutations, tests all variants in sandbox,
+        and keeps the best performing one.
+        """
+        import random
+
+        print(f"[CodeEvolution] Using population-based evolution for change proposal")
+
+        # Step 1: Validate original code first
+        result, message = self.validator.validate(new_code)
+        if result != ValidationResult.VALID:
+            print(f"[CodeEvolution] Original code validation failed: {message}")
+            # Return a failed change
+            change_id = hashlib.md5(f"{new_code}{datetime.now().isoformat()}".encode()).hexdigest()[:12]
+            change = CodeChange(
+                id=change_id,
+                change_type=change_type,
+                target_file=target_file or str(self.functions_file),
+                original_code=original_code,
+                new_code=new_code,
+                description=description,
+                timestamp=datetime.now().isoformat(),
+                validation_result=result
+            )
+            return change
+
+        # Step 2: Add original to population
+        original_individual = self.population.add_individual(new_code, fitness=0.0)
+        print(f"[CodeEvolution] Added original code as individual {original_individual.id}")
+
+        # Step 3: Generate 3-5 variants using mutations
+        num_variants = random.randint(3, 5)
+        variants: List[CodeIndividual] = [original_individual]
+
+        print(f"[CodeEvolution] Generating {num_variants} variants via mutation...")
+
+        for i in range(num_variants):
+            # Apply random mutation
+            mutation_type = random.choice(list(MutationType))
+            mutated_code, mutation_desc = self.mutator.mutate(new_code, mutation_type)
+
+            # Validate mutated code
+            mut_result, _ = self.validator.validate(mutated_code)
+            if mut_result == ValidationResult.VALID and mutated_code != new_code:
+                variant = self.population.add_individual(
+                    mutated_code,
+                    fitness=0.0,
+                    parent_id=original_individual.id
+                )
+                variant.mutations = [mutation_desc]
+                variants.append(variant)
+                print(f"[CodeEvolution]   Variant {i+1}: {mutation_desc}")
+            else:
+                print(f"[CodeEvolution]   Variant {i+1}: mutation failed or invalid")
+
+        # Step 4: Test all variants in sandbox
+        print(f"[CodeEvolution] Testing {len(variants)} variants in sandbox...")
+
+        for variant in variants:
+            success, test_results = self.sandbox.test_code(variant.code, test_cases)
+            variant.test_results = test_results
+
+            # Calculate fitness from test results
+            if test_cases:
+                # Fitness from test pass rate
+                total = test_results.get('tests_passed', 0) + test_results.get('tests_failed', 0)
+                if total > 0:
+                    variant.fitness_score = test_results.get('tests_passed', 0) / total
+                else:
+                    variant.fitness_score = 0.5 if success else 0.0
+            else:
+                # No test cases - use execution success as proxy
+                variant.fitness_score = 1.0 if success else 0.0
+
+            print(f"[CodeEvolution]   {variant.id[:8]}: fitness={variant.fitness_score:.3f}")
+
+        # Step 5: Select best performing variant
+        best_variant = max(variants, key=lambda v: v.fitness_score)
+        print(f"[CodeEvolution] Best variant: {best_variant.id} (fitness={best_variant.fitness_score:.3f})")
+
+        # Track lineage
+        lineage = self.population.get_lineage(best_variant.id)
+
+        # Step 6: Create CodeChange from best variant
+        change_id = best_variant.id
+        change = CodeChange(
+            id=change_id,
+            change_type=change_type,
+            target_file=target_file or str(self.functions_file),
+            original_code=original_code,
+            new_code=best_variant.code,
+            description=f"{description} (population-evolved, {len(best_variant.mutations)} mutations)",
+            timestamp=datetime.now().isoformat(),
+            validation_result=ValidationResult.VALID,
+            test_results=best_variant.test_results
+        )
+
+        # Add population metadata to test_results
+        if change.test_results:
+            change.test_results['population_metadata'] = {
+                'variants_tested': len(variants),
+                'best_fitness': best_variant.fitness_score,
+                'mutations_applied': best_variant.mutations,
+                'lineage': lineage,
+                'parent_id': best_variant.parent_id
+            }
+
+        if best_variant.fitness_score > 0 or (not test_cases and best_variant.test_results.get('success')):
+            self.pending_changes.append(change)
+            print(f"[CodeEvolution] Change {change_id} (population-evolved) ready for deployment")
+        else:
+            print(f"[CodeEvolution] Change {change_id} failed sandbox testing")
 
         return change
 
@@ -1116,14 +1300,136 @@ class CodeEvolution:
 
     def get_stats(self) -> Dict:
         """Get evolution statistics."""
-        return {
+        stats = {
             'pending_changes': len(self.pending_changes),
             'deployed_changes': len(self.deployed_changes),
             'total_commits': len(self.version_control.history),
             'rollbacks': sum(1 for c in self.version_control.history if c.get('rolled_back')),
             'active_functions': len(self.get_active_functions()),
-            'last_change': self.deployed_changes[-1].timestamp if self.deployed_changes else None
+            'last_change': self.deployed_changes[-1].timestamp if self.deployed_changes else None,
+            'population_enabled': self.use_population
         }
+
+        # Add population stats if enabled
+        if self.use_population and self.population:
+            pop_stats = self.get_population_stats()
+            stats['population'] = pop_stats
+
+        return stats
+
+    def get_population_stats(self) -> Dict:
+        """
+        Get population evolution statistics showing diversity and convergence.
+
+        Returns:
+            Dict with population statistics including:
+            - generation: Current generation number
+            - population_size: Number of individuals
+            - diversity: Genetic diversity (0-1, higher = more diverse)
+            - best_fitness: Highest fitness in population
+            - avg_fitness: Average fitness across population
+            - convergence: How converged the population is (0-1, higher = more converged)
+            - hall_of_fame_size: Number of individuals in hall of fame
+            - total_mutations: Total mutations applied
+            - lineage_depth: Average lineage depth in population
+        """
+        if not self.use_population or not self.population:
+            return {
+                'enabled': False,
+                'message': 'Population evolution not enabled'
+            }
+
+        # Get base stats from population
+        pop_stats = self.population.get_stats()
+
+        # Calculate convergence (inverse of diversity)
+        diversity = pop_stats.get('diversity', 0.0)
+        convergence = 1.0 - diversity
+
+        # Calculate average lineage depth
+        lineage_depths = []
+        for ind in self.population.individuals:
+            lineage = self.population.get_lineage(ind.id)
+            lineage_depths.append(len(lineage))
+        avg_lineage_depth = sum(lineage_depths) / len(lineage_depths) if lineage_depths else 0
+
+        # Get fitness distribution for analysis
+        fitnesses = [ind.fitness_score for ind in self.population.individuals]
+        fitness_std = 0.0
+        if len(fitnesses) > 1:
+            avg = sum(fitnesses) / len(fitnesses)
+            fitness_std = (sum((f - avg) ** 2 for f in fitnesses) / len(fitnesses)) ** 0.5
+
+        # Get best individuals info
+        best_individuals = self.population.get_best(3)
+        best_info = []
+        for ind in best_individuals:
+            best_info.append({
+                'id': ind.id,
+                'fitness': ind.fitness_score,
+                'generation': ind.generation,
+                'mutations': ind.mutations[-3:] if ind.mutations else []  # Last 3 mutations
+            })
+
+        return {
+            'enabled': True,
+            'generation': pop_stats.get('generation', 0),
+            'population_size': pop_stats.get('population_size', 0),
+            'diversity': round(diversity, 4),
+            'convergence': round(convergence, 4),
+            'best_fitness': round(pop_stats.get('best_fitness', 0.0), 4),
+            'avg_fitness': round(pop_stats.get('avg_fitness', 0.0), 4),
+            'min_fitness': round(pop_stats.get('min_fitness', 0.0), 4),
+            'fitness_std': round(fitness_std, 4),
+            'hall_of_fame_size': pop_stats.get('hall_of_fame_size', 0),
+            'total_mutations': pop_stats.get('total_mutations', 0),
+            'avg_lineage_depth': round(avg_lineage_depth, 2),
+            'best_individuals': best_info
+        }
+
+    def evolve_population(self, test_cases: List[Dict] = None, generations: int = 1) -> Dict:
+        """
+        Trigger population evolution for a specified number of generations.
+
+        Args:
+            test_cases: Test cases for fitness evaluation
+            generations: Number of generations to evolve (default: 1)
+
+        Returns:
+            Dict with evolution results
+        """
+        if not self.use_population or not self.population:
+            return {
+                'success': False,
+                'message': 'Population evolution not enabled'
+            }
+
+        if len(self.population.individuals) == 0:
+            return {
+                'success': False,
+                'message': 'Population is empty. Add code via propose_change first.'
+            }
+
+        results = {
+            'success': True,
+            'generations_evolved': 0,
+            'stats_history': []
+        }
+
+        print(f"[CodeEvolution] Evolving population for {generations} generation(s)...")
+
+        for gen in range(generations):
+            stats = self.population.evolve_generation(test_cases)
+            results['stats_history'].append(stats)
+            results['generations_evolved'] += 1
+
+            print(f"[CodeEvolution] Generation {stats['generation']}: "
+                  f"best={stats['best_fitness']:.3f}, avg={stats['avg_fitness']:.3f}")
+
+        # Get final population stats
+        results['final_stats'] = self.get_population_stats()
+
+        return results
 
     # === SELF-INTROSPECTION METHODS ===
     # These allow the AI to read and understand its own code
