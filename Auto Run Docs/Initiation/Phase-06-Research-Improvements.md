@@ -168,10 +168,11 @@ Random Network Distillation for smarter exploration of what to learn.
   - Track: curiosity decay over time, novel topic discovery rate
   - **Completed 2026-02-03**: Fully integrated RNDCuriosity into ActiveLearner. Added `use_rnd` parameter to `__init__()`, implemented `_compute_rnd_curiosity()` and `_get_topic_embedding()` helpers, updated `should_learn()` to combine traditional curiosity with RND curiosity (configurable weight via `set_rnd_weight()`), added RND predictor updates in `record_exposure()` on successful learning, implemented comprehensive tracking via `_rnd_stats` dict (curiosity_history, novel_discoveries, total_rnd_updates, curiosity_decay_rate), added `get_rnd_stats()` method, updated persistence to save/load all RND state. Created 25 new tests in `tests/test_active_learning_rnd.py`. All 28 RND tests + 25 new integration tests pass.
 
-- [ ] Add curiosity visualization in `integrations/rnd_curiosity.py`:
+- [x] Add curiosity visualization in `integrations/rnd_curiosity.py`:
   - `get_curiosity_map(topics: List[str]) -> Dict[str, float]`: curiosity per topic
   - `get_exploration_stats() -> Dict`: total explored, novelty trend, hotspots
   - Add `/curiosity` command in chat.py to show current exploration state
+  - **Completed 2026-02-03**: `get_curiosity_map()` and `get_exploration_stats()` were already implemented in `rnd_curiosity.py` (lines 458-554). Added `/curiosity [topics]` command to `chat.py` including: RND curiosity module import with availability check, help text update, comprehensive command handler showing exploration stats (total explored, unique topics, avg curiosity, trend, novelty indicators), most curious topics from history, optional user-specified topic analysis with comma-separated input, recommendations based on AI interests with novelty hotspots, and Active Learner RND integration stats. Created 8 tests in `tests/test_curiosity_command.py` covering all visualization components. All tests pass.
 
 ---
 

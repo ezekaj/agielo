@@ -59,6 +59,17 @@ except ImportError:
     get_code_evolution = None
     print("[CodeEvolution] Code evolution not available")
 
+# RND Curiosity for novelty-driven exploration
+try:
+    from integrations.rnd_curiosity import RNDCuriosity, get_rnd_curiosity
+    RND_CURIOSITY_AVAILABLE = True
+    print("[RNDCuriosity] Curiosity-driven exploration: AVAILABLE")
+except ImportError:
+    RND_CURIOSITY_AVAILABLE = False
+    RNDCuriosity = None
+    get_rnd_curiosity = None
+    print("[RNDCuriosity] RND curiosity not available")
+
 # Super Agent for intelligent web search
 try:
     from integrations.super_agent import SuperAgent
@@ -2209,6 +2220,7 @@ Commands:
   /train           - Run MLX fine-tuning manually
   /evolve population [n]  - Run population-based code evolution (n generations)
   /selfplay [topic] [n]   - Run self-play training (optional topic, n questions)
+  /curiosity [topics]     - Show RND curiosity exploration state and recommendations
   /quit            - Exit
 """)
     print("=" * 60)
@@ -2551,6 +2563,85 @@ Commands:
                     print(f"\nPerformance by difficulty:")
                     for diff, data in prog_stats['rounds_by_difficulty'].items():
                         print(f"  {diff}: {data['count']} rounds, {data['avg_correct_rate']:.1%} avg accuracy")
+
+                print()
+                continue
+
+            if user_input.startswith('/curiosity'):
+                print(f"\n--- RND Curiosity Exploration State ---")
+
+                if not RND_CURIOSITY_AVAILABLE:
+                    print("RND curiosity system not available.")
+                    print()
+                    continue
+
+                try:
+                    rnd = get_rnd_curiosity()
+
+                    # Get exploration statistics
+                    stats = rnd.get_exploration_stats()
+                    print(f"\nExploration Statistics:")
+                    print(f"  Total explored: {stats['total_explored']}")
+                    print(f"  Unique topics: {stats.get('unique_topics', 0)}")
+                    print(f"  Avg curiosity: {stats['avg_curiosity']:.3f}")
+                    print(f"  Recent avg: {stats.get('recent_avg_curiosity', stats['avg_curiosity']):.3f}")
+                    print(f"  Curiosity trend: {stats['curiosity_trend']:+.3f}")
+                    print(f"  Exploration rate: {stats.get('exploration_rate_per_hour', 0):.1f}/hour")
+
+                    # Novelty status
+                    print(f"\nNovelty Indicators:")
+                    print(f"  High curiosity (>0.7): {stats['high_curiosity_count']}")
+                    print(f"  Low curiosity (<0.3): {stats['low_curiosity_count']}")
+                    print(f"  Running mean: {stats['running_mean']:.4f}")
+                    print(f"  Running std: {stats['running_std']:.4f}")
+
+                    # Most curious topics from history
+                    most_curious = rnd.get_most_curious_topics(5)
+                    if most_curious:
+                        print(f"\nMost Curious Topics (from history):")
+                        for topic, curiosity in most_curious:
+                            marker = "🔥" if curiosity > 0.7 else "🟢" if curiosity > 0.5 else "🔵"
+                            print(f"  {marker} {topic[:40]}: {curiosity:.3f}")
+
+                    # Parse optional topics to analyze
+                    parts = user_input.split(maxsplit=1)
+                    if len(parts) > 1:
+                        # User provided topics to analyze
+                        user_topics = [t.strip() for t in parts[1].split(',')]
+                        if user_topics:
+                            print(f"\nCuriosity for requested topics:")
+                            curiosity_map = rnd.get_curiosity_map(user_topics)
+                            sorted_topics = sorted(curiosity_map.items(), key=lambda x: x[1], reverse=True)
+                            for topic, curiosity in sorted_topics:
+                                marker = "🔥" if curiosity > 0.7 else "🟢" if curiosity > 0.5 else "🔵"
+                                print(f"  {marker} {topic}: {curiosity:.3f}")
+                    else:
+                        # Suggest topics based on AI's interests
+                        print(f"\nRecommendations:")
+                        if ai.interests:
+                            print("  Analyzing your interests for novelty...")
+                            curiosity_map = rnd.get_curiosity_map(ai.interests[-10:])
+                            hotspots = sorted(curiosity_map.items(), key=lambda x: x[1], reverse=True)[:5]
+                            if hotspots:
+                                print("  Topics to explore (by novelty):")
+                                for topic, curiosity in hotspots:
+                                    marker = "🔥" if curiosity > 0.7 else "🟢" if curiosity > 0.5 else "🔵"
+                                    print(f"    {marker} {topic}: {curiosity:.3f}")
+                        else:
+                            print("  (No interests tracked yet - chat more to build up interests)")
+
+                        # Show active learner RND stats if available
+                        if hasattr(ai, 'active_learner') and ai.active_learner:
+                            al_rnd_stats = ai.active_learner.get_rnd_stats()
+                            if al_rnd_stats.get('rnd_enabled'):
+                                print(f"\nActive Learner RND Integration:")
+                                print(f"  Novel discoveries: {al_rnd_stats.get('novel_discoveries', 0)}")
+                                print(f"  Total RND updates: {al_rnd_stats.get('total_rnd_updates', 0)}")
+                                print(f"  Avg RND curiosity: {al_rnd_stats.get('avg_rnd_curiosity', 0.5):.3f}")
+                                print(f"  RND weight: {al_rnd_stats.get('rnd_weight', 0.5):.2f}")
+
+                except Exception as e:
+                    print(f"Error accessing RND curiosity: {e}")
 
                 print()
                 continue
