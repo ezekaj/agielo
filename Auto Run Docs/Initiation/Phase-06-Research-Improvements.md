@@ -24,13 +24,14 @@ Replaces the current Python-based sandbox with true Docker isolation for safe co
   - Handle Docker not installed gracefully (fall back to current Python sandbox)
   - **Completed 2026-02-03**: Created `integrations/docker_sandbox.py` with full `DockerSandbox` class, `Dockerfile.sandbox`, and Python subprocess fallback when Docker unavailable.
 
-- [ ] Integrate Docker sandbox into code evolution in `integrations/code_evolution.py`:
+- [x] Integrate Docker sandbox into code evolution in `integrations/code_evolution.py`:
   - Import `DockerSandbox` from `docker_sandbox.py`
   - Add `DOCKER_AVAILABLE` flag based on Docker presence check
   - Update `CodeSandbox.test_code()` to try Docker first, fall back to Python sandbox
   - Add `use_docker: bool = True` parameter to `CodeEvolution.__init__()`
   - Log which sandbox type is being used
   - Update `CodeValidator.DANGEROUS_CALLS` - can be more permissive with Docker isolation
+  - **Completed 2026-02-03**: Integrated DockerSandbox into CodeEvolution system. Added DOCKER_AVAILABLE flag, updated CodeSandbox to use Docker with Python fallback, added use_docker param to both CodeEvolution and CodeValidator, implemented relaxed validation rules when Docker isolation is available. All 17 existing tests pass.
 
 - [ ] Add Docker sandbox tests in `tests/test_docker_sandbox.py`:
   - Test basic code execution in container
