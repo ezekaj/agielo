@@ -24,9 +24,19 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import pickle
+import threading
+import time
 from pathlib import Path
 import chromadb
 from chromadb.config import Settings
+
+# Import Ebbinghaus forgetting and spaced repetition
+from neuro_memory.memory.forgetting import (
+    EbbinghausForgetting,
+    EbbinghausConfig,
+    SpacedRepetitionScheduler,
+    SpacedRepetitionConfig
+)
 
 
 @dataclass
@@ -76,8 +86,12 @@ class Episode:
     @classmethod
     def from_dict(cls, data: Dict) -> 'Episode':
         """Reconstruct episode from dictionary."""
+        # Keep string content as string, only convert arrays
+        content = data["content"]
+        if isinstance(content, list):
+            content = np.array(content)
         return cls(
-            content=np.array(data["content"]),
+            content=content,
             timestamp=datetime.fromisoformat(data["timestamp"]),
             location=data.get("location"),
             entities=data.get("entities", []),
@@ -100,6 +114,11 @@ class EpisodicMemoryConfig:
     consolidation_interval: int = 100  # Consolidate every N new episodes
     vector_db_backend: str = "chromadb"  # "chromadb" or "faiss"
     persistence_path: Optional[str] = "./memory_store"  # Path for persistent storage
+    # Ebbinghaus forgetting settings
+    enable_ebbinghaus: bool = True  # Enable Ebbinghaus forgetting model
+    forgetting_background_interval: float = 3600.0  # Run forgetting task every hour (seconds)
+    review_threshold: float = 0.3  # Retention threshold for review
+    auto_reinforce_high_value: bool = True  # Auto-reinforce high-importance memories
 
 
 class EpisodicMemoryStore:
@@ -119,30 +138,44 @@ class EpisodicMemoryStore:
             config: Memory configuration
         """
         self.config = config or EpisodicMemoryConfig()
-        
+
         # In-memory episode storage (hot storage)
         self.episodes: List[Episode] = []
-        
+
         # Temporal index: timestamp -> episode_ids
         self.temporal_index: Dict[str, List[str]] = {}
-        
+
         # Spatial index: location -> episode_ids
         self.spatial_index: Dict[str, List[str]] = {}
-        
+
         # Entity index: entity -> episode_ids
         self.entity_index: Dict[str, List[str]] = {}
-        
+
         # Statistics
         self.total_episodes_stored = 0
         self.episodes_offloaded = 0
-        
+
+        # Ebbinghaus forgetting tracking statistics
+        self.forgotten_memories_count = 0
+        self.reviewed_memories_count = 0
+        self.reinforced_memories_count = 0
+
         # Initialize vector database
         self._initialize_vector_db()
-        
+
         # Setup persistence
         if self.config.persistence_path:
             self.persistence_path = Path(self.config.persistence_path)
             self.persistence_path.mkdir(parents=True, exist_ok=True)
+
+        # Initialize Ebbinghaus forgetting system
+        self.ebbinghaus: Optional[EbbinghausForgetting] = None
+        self.spaced_repetition: Optional[SpacedRepetitionScheduler] = None
+        self._forgetting_thread: Optional[threading.Thread] = None
+        self._forgetting_running = False
+
+        if self.config.enable_ebbinghaus:
+            self._initialize_ebbinghaus()
         
     def _initialize_vector_db(self):
         """Initialize vector database for similarity search."""
@@ -167,7 +200,213 @@ class EpisodicMemoryStore:
         else:
             # FAISS initialization (future implementation)
             raise NotImplementedError("FAISS backend not yet implemented")
-    
+
+    def _initialize_ebbinghaus(self):
+        """Initialize Ebbinghaus forgetting and spaced repetition systems."""
+        if not self.config.persistence_path:
+            # In-memory only
+            self.ebbinghaus = EbbinghausForgetting(
+                config=EbbinghausConfig(forget_threshold=self.config.review_threshold)
+            )
+            self.spaced_repetition = SpacedRepetitionScheduler(
+                ebbinghaus=self.ebbinghaus
+            )
+        else:
+            # Persistent storage
+            ebbinghaus_path = self.persistence_path / "ebbinghaus_state.json"
+            sr_path = self.persistence_path / "spaced_repetition_state.json"
+
+            self.ebbinghaus = EbbinghausForgetting(
+                config=EbbinghausConfig(forget_threshold=self.config.review_threshold),
+                state_path=ebbinghaus_path
+            )
+            self.spaced_repetition = SpacedRepetitionScheduler(
+                ebbinghaus=self.ebbinghaus,
+                state_path=sr_path
+            )
+
+    def start_forgetting_background_task(self):
+        """
+        Start background task to process forgetting every hour.
+
+        This task:
+        1. Identifies memories below retention threshold
+        2. Auto-reinforces high-value memories
+        3. Removes truly forgotten memories from active storage
+        """
+        if self._forgetting_running:
+            return  # Already running
+
+        self._forgetting_running = True
+        self._forgetting_thread = threading.Thread(
+            target=self._forgetting_loop,
+            daemon=True,
+            name="EbbinghausForgettingTask"
+        )
+        self._forgetting_thread.start()
+
+    def stop_forgetting_background_task(self):
+        """Stop the background forgetting task."""
+        self._forgetting_running = False
+        if self._forgetting_thread and self._forgetting_thread.is_alive():
+            self._forgetting_thread.join(timeout=5.0)
+
+    def _forgetting_loop(self):
+        """Background loop for forgetting processing."""
+        while self._forgetting_running:
+            try:
+                self._process_forgetting()
+            except Exception as e:
+                print(f"[EbbinghausForgetting] Error in forgetting loop: {e}")
+
+            # Sleep for the configured interval
+            time.sleep(self.config.forgetting_background_interval)
+
+    def _process_forgetting(self):
+        """
+        Process memories for forgetting:
+        1. Check retention levels
+        2. Auto-reinforce high-importance memories (frequently accessed, highly linked)
+        3. Remove memories that should be truly forgotten
+        """
+        if not self.ebbinghaus:
+            return
+
+        now = datetime.now().timestamp()
+
+        # Get memories below retention threshold
+        at_risk = self.ebbinghaus.get_memories_below_threshold(current_time=now)
+
+        for memory_id, retention in at_risk:
+            episode = self._get_episode_by_id(memory_id)
+            if episode is None:
+                continue
+
+            # Decide: reinforce or forget based on importance
+            should_reinforce = self._should_reinforce_memory(episode)
+
+            if should_reinforce:
+                # Auto-reinforce: record successful retrieval
+                self.ebbinghaus.record_retrieval(memory_id, success=True, current_time=now)
+                if self.spaced_repetition:
+                    self.spaced_repetition.record_review(memory_id, success=True, current_time=now)
+                self.reinforced_memories_count += 1
+            else:
+                # Mark as forgotten
+                self.forgotten_memories_count += 1
+                # Optionally remove from active storage (offload to disk)
+                if self.config.enable_disk_offload:
+                    self._offload_episode(episode)
+                    self.episodes = [ep for ep in self.episodes if ep.episode_id != memory_id]
+
+    def _should_reinforce_memory(self, episode: Episode) -> bool:
+        """
+        Determine if a memory should be auto-reinforced.
+
+        High-value memories are:
+        - High importance score (from surprise)
+        - Linked to many entities
+        - Frequently accessed (stored in metadata)
+        """
+        if not self.config.auto_reinforce_high_value:
+            return False
+
+        # High importance threshold
+        if episode.importance > 0.6:
+            return True
+
+        # Linked to many entities (social/contextual importance)
+        if len(episode.entities) >= 3:
+            return True
+
+        # Check access count in metadata
+        access_count = episode.metadata.get('access_count', 0)
+        if access_count >= 5:
+            return True
+
+        return False
+
+    def record_retrieval(self, episode_id: str, success: bool = True):
+        """
+        Record a memory retrieval for spaced repetition.
+
+        Args:
+            episode_id: ID of the retrieved episode
+            success: Whether the retrieval was successful
+        """
+        now = datetime.now().timestamp()
+
+        # Update Ebbinghaus forgetting
+        if self.ebbinghaus:
+            self.ebbinghaus.record_retrieval(episode_id, success=success, current_time=now)
+
+        # Update spaced repetition schedule
+        if self.spaced_repetition:
+            self.spaced_repetition.record_review(episode_id, success=success, current_time=now)
+            self.reviewed_memories_count += 1
+
+        # Update episode metadata
+        episode = self._get_episode_by_id(episode_id)
+        if episode:
+            access_count = episode.metadata.get('access_count', 0)
+            episode.metadata['access_count'] = access_count + 1
+            episode.metadata['last_accessed'] = datetime.now().isoformat()
+
+    def get_memories_for_review(self, limit: int = 10) -> List[Episode]:
+        """
+        Get memories that are due for spaced repetition review.
+
+        Prioritizes:
+        1. Immediate reviews (failed retrievals)
+        2. Most overdue memories
+        3. High-importance memories at risk
+
+        Args:
+            limit: Maximum number of memories to return
+
+        Returns:
+            List of episodes needing review
+        """
+        if not self.spaced_repetition:
+            return []
+
+        due_memory_ids = self.spaced_repetition.get_due_for_review(limit=limit)
+
+        # Retrieve full episodes
+        episodes = []
+        for memory_id in due_memory_ids:
+            episode = self._get_episode_by_id(memory_id)
+            if episode:
+                episodes.append(episode)
+
+        return episodes
+
+    def get_forgetting_statistics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive statistics about the forgetting system.
+
+        Returns:
+            Dict with forgetting, retention, and review statistics
+        """
+        stats = {
+            "forgotten_memories": self.forgotten_memories_count,
+            "reviewed_memories": self.reviewed_memories_count,
+            "reinforced_memories": self.reinforced_memories_count,
+            "ebbinghaus": {},
+            "spaced_repetition": {},
+            "stability_distribution": {}
+        }
+
+        if self.ebbinghaus:
+            eb_stats = self.ebbinghaus.get_statistics()
+            stats["ebbinghaus"] = eb_stats
+            stats["stability_distribution"] = eb_stats.get("stability_distribution", {})
+
+        if self.spaced_repetition:
+            stats["spaced_repetition"] = self.spaced_repetition.get_statistics()
+
+        return stats
+
     def store_episode(
         self,
         content: np.ndarray,
@@ -220,27 +459,41 @@ class EpisodicMemoryStore:
         
         # Update statistics
         self.total_episodes_stored += 1
-        
+
+        # Register with Ebbinghaus forgetting system
+        if self.ebbinghaus and episode.episode_id:
+            ts = episode.timestamp.timestamp()
+            # Initial retention based on importance
+            initial_retention = 0.5 + (0.5 * episode.importance)
+            self.ebbinghaus.register_memory(
+                memory_id=episode.episode_id,
+                initial_retention=initial_retention,
+                timestamp=ts
+            )
+            # Schedule for spaced repetition
+            if self.spaced_repetition:
+                self.spaced_repetition.schedule_memory(episode.episode_id, current_time=ts)
+
         # Check if consolidation/offloading needed
         if len(self.episodes) >= self.config.offload_threshold:
             self._consolidate_memory()
-        
+
         return episode
     
     def _compute_importance(self, surprise: float) -> float:
         """
         Compute importance score for episode.
         Higher surprise → higher importance → prioritized for consolidation.
-        
+
         Args:
             surprise: Surprise value from Bayesian surprise engine
-            
+
         Returns:
             Importance score [0, 1]
         """
         # Sigmoid transformation of surprise
         importance = 1.0 / (1.0 + np.exp(-surprise + 2.0))
-        return np.clip(importance, 0.0, 1.0)
+        return float(np.clip(importance, 0.0, 1.0))
     
     def _generate_embedding(self, content: np.ndarray) -> np.ndarray:
         """
@@ -263,10 +516,10 @@ class EpisodicMemoryStore:
             embedding = content[:self.config.embedding_dim]
         
         # Normalize
-        norm = np.linalg.norm(embedding)
+        norm = float(np.linalg.norm(embedding))
         if norm > 0:
             embedding = embedding / norm
-        
+
         return embedding
     
     def _update_indices(self, episode: Episode):
@@ -312,30 +565,58 @@ class EpisodicMemoryStore:
     ) -> List[Episode]:
         """
         Retrieve k most similar episodes by vector similarity.
-        
+
         Args:
             query_embedding: Query vector
             k: Number of episodes to retrieve
             filter_criteria: Optional filters (e.g., {"location": "office"})
-            
+
         Returns:
             List of similar episodes
         """
         # Query vector database
         where_clause = None
         if filter_criteria:
-            where_clause = filter_criteria
-        
-        results = self.collection.query(
-            query_embeddings=[query_embedding.tolist()],
-            n_results=k,
-            where=where_clause
-        )
-        
+            # ChromaDB requires specific format for filters
+            # Convert to $and format if multiple criteria
+            if len(filter_criteria) == 1:
+                # Single criterion - use directly
+                key, value = list(filter_criteria.items())[0]
+                if isinstance(value, list):
+                    # For lists (like entities), use $contains
+                    where_clause = {key: {"$in": value}}
+                else:
+                    where_clause = {key: value}
+            elif len(filter_criteria) > 1:
+                # Multiple criteria - use $and
+                conditions = []
+                for key, value in filter_criteria.items():
+                    if isinstance(value, list):
+                        conditions.append({key: {"$in": value}})
+                    else:
+                        conditions.append({key: value})
+                where_clause = {"$and": conditions}
+
+        # Ensure query embedding is 1D
+        query_emb = np.asarray(query_embedding).flatten().tolist()
+
+        try:
+            results = self.collection.query(
+                query_embeddings=[query_emb],
+                n_results=k,
+                where=where_clause
+            )
+        except ValueError:
+            # If filter fails, try without filter
+            results = self.collection.query(
+                query_embeddings=[query_emb],
+                n_results=k
+            )
+
         # Retrieve full episodes
         episode_ids = results['ids'][0] if results['ids'] else []
         episodes = [self._get_episode_by_id(eid) for eid in episode_ids]
-        
+
         return [ep for ep in episodes if ep is not None]
     
     def retrieve_by_temporal_range(
@@ -438,7 +719,7 @@ class EpisodicMemoryStore:
         """Save memory state to disk."""
         if not self.persistence_path:
             return
-        
+
         state = {
             "config": self.config.__dict__,
             "episodes": [ep.to_dict() for ep in self.episodes],
@@ -446,9 +727,13 @@ class EpisodicMemoryStore:
             "spatial_index": self.spatial_index,
             "entity_index": self.entity_index,
             "total_episodes_stored": self.total_episodes_stored,
-            "episodes_offloaded": self.episodes_offloaded
+            "episodes_offloaded": self.episodes_offloaded,
+            # Ebbinghaus forgetting stats
+            "forgotten_memories_count": self.forgotten_memories_count,
+            "reviewed_memories_count": self.reviewed_memories_count,
+            "reinforced_memories_count": self.reinforced_memories_count
         }
-        
+
         state_file = self.persistence_path / "memory_state.json"
         with open(state_file, 'w') as f:
             json.dump(state, f, indent=2)
@@ -476,18 +761,42 @@ class EpisodicMemoryStore:
         # Restore statistics
         self.total_episodes_stored = state["total_episodes_stored"]
         self.episodes_offloaded = state["episodes_offloaded"]
+
+        # Restore Ebbinghaus forgetting stats
+        self.forgotten_memories_count = state.get("forgotten_memories_count", 0)
+        self.reviewed_memories_count = state.get("reviewed_memories_count", 0)
+        self.reinforced_memories_count = state.get("reinforced_memories_count", 0)
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get memory statistics."""
-        return {
+        """Get memory statistics including forgetting system stats."""
+        stats = {
             "total_episodes": self.total_episodes_stored,
             "episodes_in_memory": len(self.episodes),
             "episodes_offloaded": self.episodes_offloaded,
             "unique_locations": len(self.spatial_index),
             "unique_entities": len(self.entity_index),
             "temporal_span_days": len(self.temporal_index),
-            "mean_importance": np.mean([ep.importance for ep in self.episodes]) if self.episodes else 0.0
+            "mean_importance": np.mean([ep.importance for ep in self.episodes]) if self.episodes else 0.0,
+            # Ebbinghaus forgetting stats
+            "forgotten_memories": self.forgotten_memories_count,
+            "reviewed_memories": self.reviewed_memories_count,
+            "reinforced_memories": self.reinforced_memories_count
         }
+
+        # Add forgetting system stats if available
+        if self.ebbinghaus:
+            eb_stats = self.ebbinghaus.get_statistics()
+            stats["avg_retention"] = eb_stats.get("avg_retention", 0.0)
+            stats["memories_at_risk"] = eb_stats.get("memories_at_risk", 0)
+            stats["stability_distribution"] = eb_stats.get("stability_distribution", {})
+
+        if self.spaced_repetition:
+            sr_stats = self.spaced_repetition.get_statistics()
+            stats["due_for_review"] = sr_stats.get("due_now", 0)
+            stats["upcoming_reviews_24h"] = sr_stats.get("upcoming_24h", 0)
+            stats["review_success_rate"] = sr_stats.get("success_rate", 0.0)
+
+        return stats
 
 
 if __name__ == "__main__":

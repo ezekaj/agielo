@@ -94,6 +94,17 @@ except ImportError:
     SLEEP_AVAILABLE = False
     print("[Warning] Sleep consolidation not available")
 
+# Episodic Memory with Ebbinghaus Forgetting for spaced repetition
+try:
+    from neuro_memory.memory.episodic_store import EpisodicMemoryStore, EpisodicMemoryConfig
+    EPISODIC_MEMORY_AVAILABLE = True
+    print("[EpisodicMemory] Spaced repetition & Ebbinghaus forgetting: AVAILABLE")
+except ImportError:
+    EPISODIC_MEMORY_AVAILABLE = False
+    EpisodicMemoryStore = None
+    EpisodicMemoryConfig = None
+    print("[EpisodicMemory] Not available")
+
 
 class WebLearner:
     """Autonomous web learning capabilities with multi-source parallel search."""
@@ -824,6 +835,28 @@ class AutonomousAI:
         self.browser = None
         if BROWSER_AVAILABLE:
             print("[Browser] Web browsing: AVAILABLE")
+
+        # Episodic Memory with Ebbinghaus Forgetting for spaced repetition
+        self.episodic_memory = None
+        if EPISODIC_MEMORY_AVAILABLE:
+            try:
+                config = EpisodicMemoryConfig(
+                    persistence_path="./memory_store/episodic",
+                    enable_ebbinghaus=True,
+                    forgetting_background_interval=3600.0,  # 1 hour
+                    review_threshold=0.3,
+                    auto_reinforce_high_value=True
+                )
+                self.episodic_memory = EpisodicMemoryStore(config)
+                self.episodic_memory.load_state()
+                # Start background forgetting task
+                self.episodic_memory.start_forgetting_background_task()
+                em_stats = self.episodic_memory.get_statistics()
+                print(f"[EpisodicMemory] Loaded {em_stats['total_episodes']} episodes, "
+                      f"{em_stats.get('due_for_review', 0)} due for review")
+            except Exception as e:
+                print(f"[EpisodicMemory] Failed to initialize: {e}")
+                self.episodic_memory = None
 
         # Start background cognitive loop
         self.learning_thread = threading.Thread(target=self._autonomous_loop, daemon=True)
@@ -2184,6 +2217,11 @@ Training data saved for fine-tuning."""
         # Close browser
         if self.browser:
             self.browser.close()
+        # Stop episodic memory background task and save state
+        if self.episodic_memory:
+            self.episodic_memory.stop_forgetting_background_task()
+            self.episodic_memory.save_state()
+            print(f"[Saved episodic memory state]")
 
     def browse(self, command: str) -> str:
         """Execute a browser command."""
@@ -2221,6 +2259,7 @@ Commands:
   /evolve population [n]  - Run population-based code evolution (n generations)
   /selfplay [topic] [n]   - Run self-play training (optional topic, n questions)
   /curiosity [topics]     - Show RND curiosity exploration state and recommendations
+  /review [n]             - Review memories due for spaced repetition (default: 5)
   /quit            - Exit
 """)
     print("=" * 60)
@@ -2642,6 +2681,126 @@ Commands:
 
                 except Exception as e:
                     print(f"Error accessing RND curiosity: {e}")
+
+                print()
+                continue
+
+            if user_input.startswith('/review'):
+                print(f"\n--- Memory Review (Spaced Repetition) ---")
+
+                if not EPISODIC_MEMORY_AVAILABLE or not ai.episodic_memory:
+                    print("Episodic memory with Ebbinghaus forgetting not available.")
+                    print()
+                    continue
+
+                try:
+                    # Parse optional limit: /review [n]
+                    parts = user_input.split()
+                    limit = 5  # default
+                    if len(parts) > 1:
+                        try:
+                            limit = int(parts[1])
+                        except ValueError:
+                            print(f"Invalid limit '{parts[1]}', using default 5")
+
+                    # Get forgetting system statistics first
+                    forgetting_stats = ai.episodic_memory.get_forgetting_statistics()
+                    print(f"\nForgetting System Status:")
+                    print(f"  Forgotten memories: {forgetting_stats['forgotten_memories']}")
+                    print(f"  Reviewed memories: {forgetting_stats['reviewed_memories']}")
+                    print(f"  Auto-reinforced: {forgetting_stats['reinforced_memories']}")
+
+                    if forgetting_stats.get('ebbinghaus'):
+                        eb = forgetting_stats['ebbinghaus']
+                        print(f"\nEbbinghaus Model:")
+                        print(f"  Total tracked: {eb.get('total_memories', 0)}")
+                        print(f"  Avg retention: {eb.get('avg_retention', 0):.1%}")
+                        print(f"  Memories at risk: {eb.get('memories_at_risk', 0)}")
+
+                    # Stability distribution
+                    stability_dist = forgetting_stats.get('stability_distribution', {})
+                    if stability_dist:
+                        print(f"\nStability Distribution:")
+                        for bucket, count in stability_dist.items():
+                            bar = "█" * min(count, 20)
+                            print(f"  {bucket}: {bar} ({count})")
+
+                    if forgetting_stats.get('spaced_repetition'):
+                        sr = forgetting_stats['spaced_repetition']
+                        print(f"\nSpaced Repetition:")
+                        print(f"  Due now: {sr.get('due_now', 0)}")
+                        print(f"  Upcoming (24h): {sr.get('upcoming_24h', 0)}")
+                        print(f"  Review success rate: {sr.get('success_rate', 0):.1%}")
+
+                    # Get memories due for review
+                    due_memories = ai.episodic_memory.get_memories_for_review(limit=limit)
+
+                    if due_memories:
+                        print(f"\n--- Memories Due for Review ({len(due_memories)}) ---")
+                        for i, episode in enumerate(due_memories, 1):
+                            # Display memory info
+                            content_preview = str(episode.content)[:50] if hasattr(episode.content, '__str__') else "..."
+                            location = episode.location or "Unknown"
+                            entities = ", ".join(episode.entities[:3]) if episode.entities else "None"
+                            importance = episode.importance
+
+                            print(f"\n{i}. Memory ID: {episode.episode_id[:30]}...")
+                            print(f"   Content: {content_preview}...")
+                            print(f"   Location: {location}")
+                            print(f"   Entities: {entities}")
+                            print(f"   Importance: {importance:.2f}")
+                            print(f"   Timestamp: {episode.timestamp.strftime('%Y-%m-%d %H:%M')}")
+
+                            # Get retention info
+                            if ai.episodic_memory.ebbinghaus:
+                                retention = ai.episodic_memory.ebbinghaus.compute_retention(
+                                    episode.episode_id
+                                )
+                                print(f"   Current retention: {retention:.1%}")
+
+                        # Ask if user wants to review
+                        print(f"\nTo review a memory (reinforce it), use: /review-confirm <number>")
+                        print("This marks it as successfully retrieved, increasing its stability.")
+                    else:
+                        print(f"\nNo memories currently due for review!")
+                        print("Your memories are well-maintained. Check back later.")
+
+                except Exception as e:
+                    print(f"Error accessing memory review: {e}")
+
+                print()
+                continue
+
+            if user_input.startswith('/review-confirm'):
+                # Confirm review of a specific memory
+                if not EPISODIC_MEMORY_AVAILABLE or not ai.episodic_memory:
+                    print("Episodic memory not available.")
+                    print()
+                    continue
+
+                try:
+                    parts = user_input.split()
+                    if len(parts) < 2:
+                        print("Usage: /review-confirm <number>")
+                        print()
+                        continue
+
+                    idx = int(parts[1]) - 1  # Convert to 0-indexed
+                    due_memories = ai.episodic_memory.get_memories_for_review(limit=10)
+
+                    if 0 <= idx < len(due_memories):
+                        episode = due_memories[idx]
+                        ai.episodic_memory.record_retrieval(episode.episode_id, success=True)
+                        print(f"✓ Memory reviewed successfully!")
+                        print(f"  Memory: {episode.episode_id[:30]}...")
+                        print(f"  Stability increased. Next review scheduled.")
+                    else:
+                        print(f"Invalid memory number. Use /review first to see available memories.")
+
+                except ValueError:
+                    print("Usage: /review-confirm <number>")
+                except Exception as e:
+                    print(f"Error confirming review: {e}")
 
                 print()
                 continue

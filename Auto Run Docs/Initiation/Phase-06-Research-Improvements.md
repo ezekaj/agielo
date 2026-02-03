@@ -197,12 +197,13 @@ Ebbinghaus-style forgetting with spaced repetition for better memory.
   - `get_due_for_review(limit=10) -> List[memory_id]`: memories needing reinforcement
   - **Completed 2026-02-03**: Implemented `SpacedRepetitionScheduler` class with full functionality. Includes `SpacedRepetitionConfig` (base_intervals: [24h, 72h, 168h, 336h, 720h, 2160h], immediate_review_delay: 15min, stability_weight), `ReviewItem` dataclass tracking memory_id, next_review, stability, retention, interval_level, is_immediate. Core methods: `schedule_memory()` for initial scheduling, `record_review(success)` advancing interval levels on success or scheduling immediate review on failure, `get_due_for_review(limit=10)` returning overdue memory IDs sorted by urgency, `get_upcoming_reviews(hours_ahead)` for planning, `get_statistics()` for review metrics. State persistence via JSON. Added 30 new tests in 10 test classes covering all functionality. All 62 Ebbinghaus/SpacedRepetition tests pass.
 
-- [ ] Integrate improved forgetting into memory system:
+- [x] Integrate improved forgetting into memory system:
   - Update `EpisodicStore` to use new `EbbinghausForgetting`
   - Add background task to process forgetting (run every hour)
   - Prioritize reinforcing high-value memories (frequently accessed, linked to many others)
   - Add `/review` command in chat.py to manually review due memories
   - Track: forgotten memories, reviewed memories, stability distribution
+  - **Completed 2026-02-03**: Fully integrated Ebbinghaus forgetting into EpisodicMemoryStore. Updated imports to include EbbinghausForgetting and SpacedRepetitionScheduler from forgetting.py. Added new config options (enable_ebbinghaus, forgetting_background_interval, review_threshold, auto_reinforce_high_value). Added _initialize_ebbinghaus() method. Implemented start/stop_forgetting_background_task() with threaded loop that runs every hour. Added _process_forgetting() to identify at-risk memories, auto-reinforce high-value ones (importance>0.6, many entities, frequently accessed), and offload truly forgotten ones. Added record_retrieval() to track retrievals with spaced repetition. Added get_memories_for_review() and get_forgetting_statistics() methods. Updated store_episode() to register with Ebbinghaus and schedule for spaced repetition. Updated get_statistics() to include forgetting metrics (avg_retention, memories_at_risk, due_for_review, stability_distribution). Updated save_state()/load_state() to persist forgetting stats. Added /review and /review-confirm commands in chat.py with full statistics display including Ebbinghaus model status, stability distribution, spaced repetition stats, and memory review workflow. Added AutonomousAI initialization of episodic memory with background task, and cleanup on stop(). Created 15 tests in tests/test_episodic_ebbinghaus_integration.py covering all functionality. All 15 integration tests pass, all 62 Ebbinghaus tests pass.
 
 ---
 
