@@ -28,7 +28,15 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 33 tests pass including edge case validation
 
 ### 7A.2 - Replace All Bare Exception Handlers
-- [ ] Fix `integrations/autonomous_worker.py` - Replace all bare `except:` with specific exception handling at lines 495 (URL check), and any other locations. Log errors properly instead of silently ignoring.
+- [x] Fix `integrations/autonomous_worker.py` - Replace all bare `except:` with specific exception handling at lines 495 (URL check), and any other locations. Log errors properly instead of silently ignoring.
+  - **VERIFIED (2026-02-03)**: All exception handlers already use proper exception types:
+    - Line 496: `except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):` for URL checks
+    - Lines 259, 270, 404, 415, 426, 440, 451, 485, 538, 883, 934: `except Exception as e:` with error logging via print()
+    - Lines 951, 960: `except (AttributeError, KeyError, TypeError) as e:` for active learning stats
+    - Lines 1054: `except (json.JSONDecodeError, IOError, OSError) as e:` for stats loading
+    - Lines 1062: `except (IOError, OSError, TypeError) as e:` for stats saving
+    - Line 1110: `except KeyboardInterrupt:` for CLI test
+  - No bare `except:` clauses exist in the file - all 18 exception handlers use specific types or `Exception as e`
 
 - [ ] Fix `integrations/docker_sandbox.py` - Replace bare excepts at lines 246, 264, 282, 290, 369, 442, 513 with proper exception handling and logging for container operations.
 
