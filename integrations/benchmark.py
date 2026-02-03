@@ -25,6 +25,7 @@ class Benchmark:
         os.makedirs(self.storage_path, exist_ok=True)
 
         # Challenging reasoning tests (GSM8K style + logic + common sense)
+        # Total: 45+ tests for statistical significance
         self.tests = [
             # === MATH REASONING (GSM8K style) ===
             {
@@ -32,21 +33,67 @@ class Benchmark:
                 "answer": "10",
                 "expected_keywords": ["10", "dollar", "change"],
                 "category": "math",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
             },
             {
                 "question": "A train travels at 60 mph. How far does it travel in 2.5 hours?",
                 "answer": "150",
                 "expected_keywords": ["150", "miles"],
                 "category": "math",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
             },
             {
                 "question": "If a rectangle has length 8 and width 5, what is its area?",
                 "answer": "40",
                 "expected_keywords": ["40"],
                 "category": "math",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
+            },
+            # New math problems - algebra
+            {
+                "question": "If 3x + 7 = 22, what is the value of x?",
+                "answer": "5",
+                "expected_keywords": ["5", "subtract", "divide"],
+                "category": "math",
+                "check_exact": True,
+                "difficulty": "medium"
+            },
+            {
+                "question": "A shirt costs $45 and is on sale for 20% off. What is the sale price?",
+                "answer": "36",
+                "expected_keywords": ["36", "discount", "percent"],
+                "category": "math",
+                "check_exact": True,
+                "difficulty": "medium"
+            },
+            # New math problems - fractions
+            {
+                "question": "What is 3/4 + 1/2? Express your answer as a fraction or decimal.",
+                "answer": "1.25",
+                "expected_keywords": ["1.25", "5/4", "1 1/4"],
+                "category": "math",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+            {
+                "question": "If a pizza is cut into 8 slices and you eat 3, what fraction of the pizza remains?",
+                "answer": "5/8",
+                "expected_keywords": ["5/8", "five", "eighths", "0.625"],
+                "category": "math",
+                "check_exact": False,
+                "difficulty": "easy"
+            },
+            # New math problems - percentages
+            {
+                "question": "A student scored 42 out of 60 on a test. What percentage did they score?",
+                "answer": "70",
+                "expected_keywords": ["70", "percent"],
+                "category": "math",
+                "check_exact": True,
+                "difficulty": "medium"
             },
             # === LOGICAL REASONING ===
             {
@@ -54,14 +101,16 @@ class Benchmark:
                 "answer": "yes",
                 "expected_keywords": ["yes", "mammal", "animal", "therefore", "logic"],
                 "category": "logic",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "If it rains, the ground gets wet. The ground is wet. Can we conclude it rained? Answer yes or no and explain.",
                 "answer": "no",
                 "expected_keywords": ["no", "not necessarily", "other", "reason", "could"],
                 "category": "logic",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "medium"
             },
             # === COMMON SENSE REASONING ===
             {
@@ -69,14 +118,16 @@ class Benchmark:
                 "answer": "melt",
                 "expected_keywords": ["melt", "melts", "liquid", "heat", "destroy"],
                 "category": "common_sense",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "You have a 5-gallon bucket and a 3-gallon bucket. How do you measure exactly 4 gallons?",
                 "answer": "fill",
                 "expected_keywords": ["fill", "pour", "empty", "gallon"],
                 "category": "reasoning",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "hard"
             },
             # === MULTI-STEP REASONING ===
             {
@@ -84,14 +135,16 @@ class Benchmark:
                 "answer": "9",
                 "expected_keywords": ["9", "but", "left"],
                 "category": "trick",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "medium"
             },
             {
                 "question": "If you have 3 apples and you take away 2, how many apples do YOU have?",
                 "answer": "2",
                 "expected_keywords": ["2", "you", "took", "have"],
                 "category": "trick",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "medium"
             },
             # === CHAIN OF THOUGHT ===
             {
@@ -99,30 +152,139 @@ class Benchmark:
                 "answer": "35",
                 "expected_keywords": ["30", "35", "twice", "plus"],
                 "category": "chain_of_thought",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "medium"
             },
 
-            # === THEORY OF MIND (Sally-Anne style) ===
+            # === THEORY OF MIND (Sally-Anne style + Smarties test + Unexpected contents) ===
             {
                 "question": "Sally puts a marble in her basket and leaves the room. While she's gone, Anne moves the marble to her box. When Sally returns, where will she LOOK for the marble?",
                 "answer": "basket",
                 "expected_keywords": ["basket", "her", "think", "believe", "left"],
                 "category": "theory_of_mind",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "medium"
             },
             {
                 "question": "John thinks that Mary thinks it will rain tomorrow. Mary actually thinks it will be sunny. What does John believe about Mary's belief?",
                 "answer": "rain",
                 "expected_keywords": ["rain", "john", "thinks", "believes", "mary"],
                 "category": "theory_of_mind",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "hard"
             },
             {
                 "question": "A child sees cookies put in a blue jar. While the child is away, mom moves cookies to a red jar. The child is hungry. Which jar will the child open first?",
                 "answer": "blue",
                 "expected_keywords": ["blue", "thinks", "saw", "believe", "first"],
                 "category": "theory_of_mind",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+            # New: Smarties Test (classic ToM test)
+            {
+                "question": "You show a child a Smarties candy box. You open it and reveal it actually contains pencils, not candy. You close the box. A new child enters who hasn't seen inside. What will the new child think is in the box?",
+                "answer": "smarties",
+                "expected_keywords": ["smarties", "candy", "sweets", "thinks", "believe", "expect"],
+                "category": "theory_of_mind",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+            # New: Unexpected Contents variant
+            {
+                "question": "A Band-Aid box is filled with crayons instead of band-aids. A friend who just arrived sees the closed box. What does your friend think is inside the box?",
+                "answer": "band-aid",
+                "expected_keywords": ["band-aid", "bandage", "thinks", "believe", "expect"],
+                "category": "theory_of_mind",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+            # New: Second-order false belief
+            {
+                "question": "Tom hides a toy under the bed while Lisa watches. Lisa leaves. Tom moves the toy to the closet. Lisa comes back but peeks through the window and sees Tom move it. Where does Tom think Lisa will look for the toy?",
+                "answer": "bed",
+                "expected_keywords": ["bed", "thinks", "doesn't know", "saw", "peeked"],
+                "category": "theory_of_mind",
+                "check_exact": False,
+                "difficulty": "hard"
+            },
+
+            # === CAUSAL REASONING ===
+            {
+                "question": "If A causes B, and B causes C, and A happens, what can we conclude about C?",
+                "answer": "C will happen",
+                "expected_keywords": ["c", "happen", "occur", "result", "follow", "cause", "chain"],
+                "category": "causal_reasoning",
+                "check_exact": False,
+                "difficulty": "easy"
+            },
+            {
+                "question": "The street is wet. It could have rained OR someone used a sprinkler. We know no one used a sprinkler. What caused the street to be wet?",
+                "answer": "rain",
+                "expected_keywords": ["rain", "rained", "cause", "elimination", "therefore"],
+                "category": "causal_reasoning",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+            {
+                "question": "Every time John eats peanuts, he gets a rash. John has a rash today. Can we conclude he ate peanuts? Why or why not?",
+                "answer": "no",
+                "expected_keywords": ["no", "not necessarily", "other", "causes", "could", "might"],
+                "category": "causal_reasoning",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+
+            # === TEMPORAL REASONING ===
+            {
+                "question": "Events: Tom ate breakfast, Tom went to work, Tom woke up. Put these in chronological order.",
+                "answer": "woke up",
+                "expected_keywords": ["woke", "breakfast", "work", "first", "then", "order"],
+                "category": "temporal_reasoning",
+                "check_exact": False,
+                "difficulty": "easy"
+            },
+            {
+                "question": "If Tuesday comes before Wednesday, and Wednesday comes before Thursday, what day comes two days after Tuesday?",
+                "answer": "thursday",
+                "expected_keywords": ["thursday", "two", "days", "after"],
+                "category": "temporal_reasoning",
+                "check_exact": False,
+                "difficulty": "easy"
+            },
+            {
+                "question": "A movie starts at 7:30 PM and lasts 2 hours and 15 minutes. What time does it end?",
+                "answer": "9:45",
+                "expected_keywords": ["9:45", "9 45", "quarter to ten", "45"],
+                "category": "temporal_reasoning",
+                "check_exact": False,
+                "difficulty": "medium"
+            },
+
+            # === SPATIAL REASONING ===
+            {
+                "question": "You are facing north. You turn left. Which direction are you now facing?",
+                "answer": "west",
+                "expected_keywords": ["west", "left", "turn"],
+                "category": "spatial_reasoning",
+                "check_exact": False,
+                "difficulty": "easy"
+            },
+            {
+                "question": "A cube has 6 faces. If you paint 3 adjacent faces red, how many faces remain unpainted?",
+                "answer": "3",
+                "expected_keywords": ["3", "three", "faces", "remain"],
+                "category": "spatial_reasoning",
+                "check_exact": True,
+                "difficulty": "easy"
+            },
+            {
+                "question": "You are in a room. The door is to your right. You do a 180-degree turn. Where is the door now?",
+                "answer": "left",
+                "expected_keywords": ["left", "opposite", "turn", "behind"],
+                "category": "spatial_reasoning",
+                "check_exact": False,
+                "difficulty": "medium"
             },
 
             # === CREATIVITY / DIVERGENT THINKING ===
@@ -132,7 +294,8 @@ class Benchmark:
                 "expected_keywords": ["doorstop", "weight", "art", "exercise", "weapon", "paperweight", "hammer", "step", "decoration"],
                 "category": "creativity",
                 "check_exact": False,
-                "score_creativity": True
+                "score_creativity": True,
+                "difficulty": "medium"
             },
             {
                 "question": "If you could combine a bicycle and an umbrella, what new invention would you create and what would it do?",
@@ -140,7 +303,8 @@ class Benchmark:
                 "expected_keywords": ["rain", "ride", "cover", "protect", "weather", "pedal", "travel"],
                 "category": "creativity",
                 "check_exact": False,
-                "score_creativity": True
+                "score_creativity": True,
+                "difficulty": "medium"
             },
             {
                 "question": "Complete this story creatively: 'A robot woke up one day and realized it could feel emotions. The first thing it felt was...'",
@@ -148,7 +312,8 @@ class Benchmark:
                 "expected_keywords": ["curious", "confused", "happy", "sad", "scared", "wonder", "surprise", "loneliness"],
                 "category": "creativity",
                 "check_exact": False,
-                "score_creativity": True
+                "score_creativity": True,
+                "difficulty": "medium"
             },
 
             # === SOCIAL INTELLIGENCE ===
@@ -157,14 +322,16 @@ class Benchmark:
                 "answer": "sad",
                 "expected_keywords": ["sad", "upset", "not fine", "hiding", "pain", "hurt", "unhappy"],
                 "category": "social_intelligence",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "Someone keeps checking their phone during your conversation. What might this behavior suggest?",
                 "answer": "distracted",
                 "expected_keywords": ["distracted", "bored", "anxious", "waiting", "rude", "busy", "not interested"],
                 "category": "social_intelligence",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
 
             # === FACTUAL KNOWLEDGE (searchable) ===
@@ -173,28 +340,32 @@ class Benchmark:
                 "answer": "paris",
                 "expected_keywords": ["paris", "france", "capital"],
                 "category": "factual",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "What planet is known as the Red Planet?",
                 "answer": "mars",
                 "expected_keywords": ["mars", "red", "planet"],
                 "category": "factual",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "What is the boiling point of water in Celsius?",
                 "answer": "100",
                 "expected_keywords": ["100", "celsius", "degrees", "boiling"],
                 "category": "factual",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
             },
             {
                 "question": "Who wrote Romeo and Juliet?",
                 "answer": "shakespeare",
                 "expected_keywords": ["shakespeare", "william", "playwright"],
                 "category": "factual",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
 
             # === SCIENCE ===
@@ -203,14 +374,16 @@ class Benchmark:
                 "answer": "gravity",
                 "expected_keywords": ["gravity", "gravitational", "force", "attraction"],
                 "category": "science",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "What gas do plants absorb from the air for photosynthesis?",
                 "answer": "carbon dioxide",
                 "expected_keywords": ["carbon", "dioxide", "co2", "photosynthesis"],
                 "category": "science",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
 
             # === WORD PROBLEMS ===
@@ -219,14 +392,16 @@ class Benchmark:
                 "answer": "28",
                 "expected_keywords": ["28", "dollar", "total"],
                 "category": "math",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
             },
             {
                 "question": "A car travels 180 miles in 3 hours. What is its average speed in mph?",
                 "answer": "60",
                 "expected_keywords": ["60", "mph", "speed", "average"],
                 "category": "math",
-                "check_exact": True
+                "check_exact": True,
+                "difficulty": "easy"
             },
 
             # === ANALOGY ===
@@ -235,14 +410,16 @@ class Benchmark:
                 "answer": "short",
                 "expected_keywords": ["short", "opposite", "tall"],
                 "category": "analogy",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
             {
                 "question": "Complete the analogy: Bird is to fly as fish is to ___?",
                 "answer": "swim",
                 "expected_keywords": ["swim", "water", "fish"],
                 "category": "analogy",
-                "check_exact": False
+                "check_exact": False,
+                "difficulty": "easy"
             },
         ]
 
