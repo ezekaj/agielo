@@ -127,10 +127,20 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 120 tests across the three files pass successfully
 
 ### 7B.3 - Fix FAISS Backend
-- [ ] In `neuro_memory/memory/episodic_store.py:202` - Either implement the FAISS backend properly OR add validation in config to prevent FAISS selection and default to chromadb with a clear error message.
+- [x] In `neuro_memory/memory/episodic_store.py:202` - Either implement the FAISS backend properly OR add validation in config to prevent FAISS selection and default to chromadb with a clear error message.
+  - **COMPLETED (2026-02-03)**: Implemented graceful fallback with warning instead of NotImplementedError:
+    - When `vector_db_backend="faiss"` is requested, emits UserWarning explaining FAISS is not yet implemented
+    - Automatically falls back to ChromaDB and updates config.vector_db_backend to reflect actual backend
+    - Unknown backend values now raise ValueError with helpful message listing supported backends
+    - Added 3 new tests: `test_chromadb_backend_works`, `test_faiss_backend_falls_back_to_chromadb`, `test_unknown_backend_raises_error`
+  - All 18 episodic memory integration tests pass
 
 ### 7B.4 - Fix Wildcard Import
-- [ ] Fix `config/__init__.py:8` - Replace `from .paths import *` with explicit imports listing all symbols: `from .paths import (KNOWLEDGE_DIR, EVOLUTION_DIR, TRAINING_DATA_FILE, LEARNED_HASHES_FILE, BENCHMARK_HISTORY_FILE, EVOLUTION_STATE_FILE, ADAPTERS_DIR, LLAMA_FACTORY_OUTPUT_DIR, MLX_MODEL_PATH, HF_MODEL_PATH, LM_STUDIO_URL, DEFAULT_MODEL)`.
+- [x] Fix `config/__init__.py:8` - Replace `from .paths import *` with explicit imports listing all symbols: `from .paths import (KNOWLEDGE_DIR, EVOLUTION_DIR, TRAINING_DATA_FILE, LEARNED_HASHES_FILE, BENCHMARK_HISTORY_FILE, EVOLUTION_STATE_FILE, ADAPTERS_DIR, LLAMA_FACTORY_OUTPUT_DIR, MLX_MODEL_PATH, HF_MODEL_PATH, LM_STUDIO_URL, DEFAULT_MODEL)`.
+  - **COMPLETED (2026-02-03)**: Replaced wildcard import with explicit imports listing all 13 symbols:
+    - 12 path constants: `KNOWLEDGE_DIR`, `EVOLUTION_DIR`, `TRAINING_DATA_FILE`, `LEARNED_HASHES_FILE`, `BENCHMARK_HISTORY_FILE`, `EVOLUTION_STATE_FILE`, `ADAPTERS_DIR`, `LLAMA_FACTORY_OUTPUT_DIR`, `MLX_MODEL_PATH`, `HF_MODEL_PATH`, `LM_STUDIO_URL`, `DEFAULT_MODEL`
+    - 1 function: `ensure_directories` (also exported from paths.py)
+  - All 16 path tests pass
 
 ---
 
