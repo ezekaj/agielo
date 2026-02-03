@@ -405,7 +405,17 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
 ## Phase 7E: Testing & Documentation
 
 ### 7E.1 - Add Integration Tests
-- [ ] Create `tests/test_episodic_ebbinghaus_integration.py` - Test that EpisodicMemoryStore correctly registers episodes with Ebbinghaus system, verifies retention calculation works, and confirms spaced repetition scheduling functions correctly.
+- [x] Create `tests/test_episodic_ebbinghaus_integration.py` - Test that EpisodicMemoryStore correctly registers episodes with Ebbinghaus system, verifies retention calculation works, and confirms spaced repetition scheduling functions correctly.
+  - **VERIFIED (2026-02-03)**: Test file already exists with 56 comprehensive tests:
+    - `TestEpisodicMemoryWithEbbinghaus`: 10 tests for Ebbinghaus initialization, episode registration, retention computation, retrieval recording, review scheduling, statistics, and importance-based reinforcement
+    - `TestBackgroundForgettingTask`: 2 tests for starting/stopping background forgetting task
+    - `TestEbbinghausDisabled`: 1 test for behavior when Ebbinghaus is disabled
+    - `TestIntegrationWithRetentionDecay`: 2 tests for retention decay over simulated time and retrieval reset
+    - `TestIndexCleanupDuringConsolidation`: 4 tests for index cleanup during memory consolidation
+    - `TestVectorDBBackendValidation`: 3 tests for ChromaDB backend, FAISS fallback, and unknown backend handling
+    - `TestEpisodeInputValidation`: 22 tests for content, surprise, and embedding validation
+    - `TestEpisodicMemoryCleanup`: 12 tests for atexit cleanup functionality
+  - All 56 tests pass successfully
 
 - [ ] Create `tests/test_concurrent_memory_access.py` - Test thread safety with multiple threads reading/writing episodes simultaneously. Verify no race conditions or data corruption.
 
