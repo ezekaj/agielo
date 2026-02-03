@@ -103,12 +103,13 @@ AI generates questions, answers them, evaluates itself, learns from mistakes.
   - Store difficulty level in evolution state
   - **Completed 2026-02-03**: Implemented `DifficultyProgression` class with full adaptive difficulty system. Features include: `record_round_performance()` to track performance history, `should_adjust_difficulty()` to determine when to change difficulty (>80% correct = increase, <50% = decrease), `adjust_difficulty()` to move between EASY→MEDIUM→HARD levels, serialization/deserialization for persistence. Integrated into `SelfPlayTrainer` with `adaptive_difficulty` parameter, automatic difficulty progression during `run_self_play_round()`, manual override via `set_difficulty()`, and new `run_adaptive_session()` for multi-round training. Difficulty state persists in evolution state via `difficulty_progression` key. Added 22 new tests covering `TestDifficultyProgression` (13 tests) and `TestSelfPlayTrainerWithAdaptiveDifficulty` (9 tests). All 51 tests pass.
 
-- [ ] Integrate self-play into autonomous learning in `chat.py`:
+- [x] Integrate self-play into autonomous learning in `chat.py`:
   - Import `SelfPlayTrainer` from `self_play.py`
   - Add self-play rounds to the autonomous learning loop
   - Run 5-10 self-play questions per cycle alongside web learning
   - Log self-play results to evolution state
   - Add `/selfplay [topic] [n]` command to trigger manual self-play session
+  - **Completed 2026-02-03**: Integrated SelfPlayTrainer into chat.py. Added import with SELF_PLAY_AVAILABLE flag, initialized trainer in AutonomousAI.__init__(), added self-play rounds to _self_improve() running every 5 cycles with 5-10 questions, created _log_self_play_results() to persist results in evolution state, and implemented /selfplay command with optional topic and n_questions arguments. All 51 self-play tests pass.
 
 ---
 

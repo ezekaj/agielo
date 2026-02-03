@@ -36,6 +36,18 @@ from integrations.browser_agent import BrowserAgent, run_browser_command, BROWSE
 from integrations.active_learning import get_active_learner, ActiveLearner
 from integrations.self_evolution import get_evolution, SelfEvolution
 
+# Self-Play Training for autonomous improvement
+try:
+    from integrations.self_play import SelfPlayTrainer, Difficulty, get_self_play_trainer
+    SELF_PLAY_AVAILABLE = True
+    print("[SelfPlay] Self-play training system: AVAILABLE")
+except ImportError:
+    SELF_PLAY_AVAILABLE = False
+    SelfPlayTrainer = None
+    get_self_play_trainer = None
+    Difficulty = None
+    print("[SelfPlay] Self-play training not available")
+
 # Code Evolution for population-based code improvement
 try:
     from integrations.code_evolution import CodeEvolution, get_code_evolution
@@ -780,6 +792,15 @@ class AutonomousAI:
                 model=model
             )
             print("[SuperAgent] Intelligent search + compare + decide: ACTIVE")
+
+        # Self-play training for autonomous improvement
+        self.self_play_trainer = None
+        self.self_play_cycle_counter = 0  # Track cycles for periodic self-play
+        if SELF_PLAY_AVAILABLE:
+            self.self_play_trainer = get_self_play_trainer()
+            sp_stats = self.self_play_trainer.get_stats()
+            print(f"[SelfPlay] Trainer active: {sp_stats['questions_generated']} questions, {sp_stats['correct_rate']:.1%} accuracy")
+            print(f"[SelfPlay] Adaptive difficulty: {sp_stats['current_difficulty']}")
 
         # Conversation quality tracking (for confidence calibration)
         self.domain_outcomes: Dict[str, List[bool]] = {}
@@ -1643,7 +1664,70 @@ JSON:"""
                 self.trainer.learn(topic, snippet, 'general-learning')
                 return f"STUDYING [{topic}]: {snippet[:120]}..."
 
+        # Priority 4: Self-Play Training (every 5 cycles, run 5-10 questions)
+        if self.self_play_trainer:
+            self.self_play_cycle_counter += 1
+            if self.self_play_cycle_counter >= 5:  # Run self-play every 5 autonomous cycles
+                self.self_play_cycle_counter = 0
+
+                # Determine topics for self-play - use interests or defaults
+                sp_topics = self.interests[-5:] if self.interests else [
+                    'programming', 'mathematics', 'science', 'reasoning', 'technology'
+                ]
+
+                # Run 5-10 self-play questions
+                n_questions = random.randint(5, 10)
+                try:
+                    result = self.self_play_trainer.run_self_play_round(
+                        topics=sp_topics,
+                        n_questions=n_questions
+                    )
+
+                    # Log results to evolution state
+                    self._log_self_play_results(result)
+
+                    correct = result.get('correct_count', 0)
+                    total = len(result.get('questions', []))
+                    rate = result.get('correct_rate', 0)
+                    difficulty = result.get('difficulty_used', 'unknown')
+
+                    return f"SELF-PLAY [{difficulty}]: {correct}/{total} correct ({rate:.1%})"
+                except Exception as e:
+                    print(f"[SelfPlay] Error during autonomous round: {e}")
+
         return None
+
+    def _log_self_play_results(self, result: Dict) -> None:
+        """Log self-play results to evolution state for tracking."""
+        if not result:
+            return
+
+        # Log to evolution system if available
+        if hasattr(self, 'evolution') and self.evolution:
+            self_play_record = {
+                'timestamp': datetime.now().isoformat(),
+                'round_id': result.get('round_id'),
+                'correct_count': result.get('correct_count', 0),
+                'total_questions': len(result.get('questions', [])),
+                'correct_rate': result.get('correct_rate', 0),
+                'avg_score': result.get('avg_score', 0),
+                'difficulty': result.get('difficulty_used', 'unknown'),
+                'difficulty_change': result.get('difficulty_change'),
+                'mistakes_learned': result.get('mistakes_learned', 0)
+            }
+
+            # Add to evolution state
+            if 'self_play_history' not in self.evolution.state:
+                self.evolution.state['self_play_history'] = []
+
+            self.evolution.state['self_play_history'].append(self_play_record)
+
+            # Keep only last 100 records
+            if len(self.evolution.state['self_play_history']) > 100:
+                self.evolution.state['self_play_history'] = self.evolution.state['self_play_history'][-100:]
+
+            # Save the state
+            self.evolution._save_state()
 
     def _periodic_reflection(self) -> Optional[str]:
         """Generate reflections showing what AI is actually DOING."""
@@ -2124,6 +2208,7 @@ Commands:
   /evolution       - Show self-evolution stats (cycles, training, improvement)
   /train           - Run MLX fine-tuning manually
   /evolve population [n]  - Run population-based code evolution (n generations)
+  /selfplay [topic] [n]   - Run self-play training (optional topic, n questions)
   /quit            - Exit
 """)
     print("=" * 60)
@@ -2391,6 +2476,81 @@ Commands:
                         print("Example: Use the code evolution API to propose code changes.")
                 else:
                     print("Population evolution not available.")
+
+                print()
+                continue
+
+            if user_input.startswith('/selfplay'):
+                print(f"\n--- Self-Play Training ---")
+
+                if not SELF_PLAY_AVAILABLE or not ai.self_play_trainer:
+                    print("Self-play training system not available.")
+                    print()
+                    continue
+
+                # Parse optional arguments: /selfplay [topic] [n]
+                parts = user_input.split()
+                topic = None
+                n_questions = 5  # default
+
+                if len(parts) > 1:
+                    # Check if first arg is a number (just n_questions)
+                    try:
+                        n_questions = int(parts[1])
+                    except ValueError:
+                        # First arg is topic
+                        topic = parts[1]
+                        if len(parts) > 2:
+                            try:
+                                n_questions = int(parts[2])
+                            except ValueError:
+                                print(f"Invalid number: {parts[2]}, using 5")
+
+                # Determine topics
+                if topic:
+                    topics = [topic]
+                elif ai.interests:
+                    topics = ai.interests[-5:]
+                else:
+                    topics = ['programming', 'mathematics', 'science', 'reasoning', 'technology']
+
+                print(f"Topics: {', '.join(topics)}")
+                print(f"Questions: {n_questions}")
+                print(f"Current difficulty: {ai.self_play_trainer.get_current_difficulty().value}")
+                print()
+
+                # Run self-play round
+                result = ai.self_play_trainer.run_self_play_round(
+                    topics=topics,
+                    n_questions=n_questions
+                )
+
+                # Log results to evolution state
+                ai._log_self_play_results(result)
+
+                # Show results summary
+                print(f"\n--- Results ---")
+                print(f"Correct: {result['correct_count']}/{len(result['questions'])} ({result['correct_rate']:.1%})")
+                print(f"Average score: {result['avg_score']:.1%}")
+                print(f"Mistakes learned from: {result['mistakes_learned']}")
+
+                if result.get('difficulty_change'):
+                    print(f"Difficulty change: {result['difficulty_change']}")
+
+                # Show overall stats
+                stats = ai.self_play_trainer.get_stats()
+                print(f"\n--- Overall Stats ---")
+                print(f"Total questions generated: {stats['questions_generated']}")
+                print(f"Overall accuracy: {stats['correct_rate']:.1%}")
+                print(f"Total rounds: {stats['total_rounds']}")
+                print(f"Current difficulty: {stats['current_difficulty']}")
+
+                # Show difficulty progression
+                prog_stats = ai.self_play_trainer.get_difficulty_progression_stats()
+                if prog_stats.get('rounds_by_difficulty'):
+                    print(f"\nPerformance by difficulty:")
+                    for diff, data in prog_stats['rounds_by_difficulty'].items():
+                        print(f"  {diff}: {data['count']} rounds, {data['avg_correct_rate']:.1%} avg accuracy")
 
                 print()
                 continue
