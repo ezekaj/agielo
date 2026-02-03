@@ -38,7 +38,16 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Line 1110: `except KeyboardInterrupt:` for CLI test
   - No bare `except:` clauses exist in the file - all 18 exception handlers use specific types or `Exception as e`
 
-- [ ] Fix `integrations/docker_sandbox.py` - Replace bare excepts at lines 246, 264, 282, 290, 369, 442, 513 with proper exception handling and logging for container operations.
+- [x] Fix `integrations/docker_sandbox.py` - Replace bare excepts at lines 246, 264, 282, 290, 369, 442, 513 with proper exception handling and logging for container operations.
+  - **COMPLETED (2026-02-03)**: All 7 bare excepts replaced with specific exception types:
+    - Line 246: `except (DockerException, APIError) as e:` for container.kill()
+    - Line 264: `except (DockerException, APIError, KeyError) as e:` for container stats
+    - Line 282: `except (DockerException, APIError) as e:` for container.remove()
+    - Line 290: `except (OSError, IOError) as e:` for temp directory cleanup
+    - Line 369: `except (ValueError, json.JSONDecodeError) as e:` for JSON parsing
+    - Line 442: `except (OSError, IOError) as e:` for fallback temp cleanup
+    - Line 513: `except (DockerException, APIError) as e:` for orphan container cleanup
+  - All handlers now log warnings with error context instead of silently ignoring
 
 - [ ] Fix `integrations/browser_agent.py` - Find and replace all bare except clauses with specific exception types and proper error logging.
 

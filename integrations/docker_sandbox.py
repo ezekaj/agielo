@@ -243,8 +243,8 @@ class DockerSandbox:
                 # Kill container on timeout
                 try:
                     container.kill()
-                except:
-                    pass
+                except (DockerException, APIError) as e:
+                    print(f"[DockerSandbox] Warning: Could not kill container: {e}")
 
             # Get logs
             result.stdout = container.logs(stdout=True, stderr=False).decode('utf-8', errors='replace')
@@ -261,8 +261,8 @@ class DockerSandbox:
             try:
                 stats = container.stats(stream=False)
                 result.memory_usage = stats.get('memory_stats', {}).get('max_usage', 0)
-            except:
-                pass
+            except (DockerException, APIError, KeyError) as e:
+                print(f"[DockerSandbox] Warning: Could not retrieve container stats: {e}")
 
             result.success = result.exit_code == 0 and result.tests_failed == 0
 
@@ -279,16 +279,16 @@ class DockerSandbox:
             if container:
                 try:
                     container.remove(force=True)
-                except:
-                    pass
+                except (DockerException, APIError) as e:
+                    print(f"[DockerSandbox] Warning: Could not remove container: {e}")
 
             # Cleanup temp directory
             if temp_dir:
                 try:
                     import shutil
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                except:
-                    pass
+                except (OSError, IOError) as e:
+                    print(f"[DockerSandbox] Warning: Could not cleanup temp directory: {e}")
 
             result.execution_time = time.time() - start_time
 
@@ -366,8 +366,8 @@ if __name__ == "__main__":
                 end = stdout.index(end_marker)
                 json_str = stdout[start:end].strip()
                 return json.loads(json_str)
-        except:
-            pass
+        except (ValueError, json.JSONDecodeError) as e:
+            print(f"[DockerSandbox] Warning: Could not parse test results: {e}")
 
         return {"passed": 0, "failed": 0, "errors": ["Could not parse test results"]}
 
@@ -439,8 +439,8 @@ if __name__ == "__main__":
                 try:
                     import shutil
                     shutil.rmtree(temp_dir, ignore_errors=True)
-                except:
-                    pass
+                except (OSError, IOError) as e:
+                    print(f"[DockerSandbox] Warning: Could not cleanup temp directory: {e}")
 
             result.execution_time = time.time() - start_time
 
@@ -510,10 +510,10 @@ if __name__ == "__main__":
                 try:
                     container.remove(force=True)
                     cleaned += 1
-                except:
-                    pass
+                except (DockerException, APIError) as e:
+                    print(f"[DockerSandbox] Warning: Could not remove orphan container: {e}")
 
-        except Exception as e:
+        except (DockerException, APIError) as e:
             print(f"[DockerSandbox] Error cleaning up containers: {e}")
 
         return cleaned
