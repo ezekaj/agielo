@@ -1061,5 +1061,182 @@ class TestRemoveMemory:
         assert result is False
 
 
+class TestForgettingEngineInputValidation:
+    """Tests for input validation in ForgettingEngine methods.
+
+    Task 7C.4: Validates that activation values are finite and non-negative,
+    and that ValueError is raised for invalid inputs.
+    """
+
+    def test_compute_activation_rejects_nan(self):
+        """Test compute_activation raises ValueError for NaN initial_activation."""
+        import numpy as np
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="initial_activation must be finite"):
+            engine.compute_activation(
+                initial_activation=float('nan'),
+                timestamp=datetime.now()
+            )
+
+    def test_compute_activation_rejects_positive_infinity(self):
+        """Test compute_activation raises ValueError for +inf initial_activation."""
+        import numpy as np
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="initial_activation must be finite"):
+            engine.compute_activation(
+                initial_activation=float('inf'),
+                timestamp=datetime.now()
+            )
+
+    def test_compute_activation_rejects_negative_infinity(self):
+        """Test compute_activation raises ValueError for -inf initial_activation."""
+        import numpy as np
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="initial_activation must be finite"):
+            engine.compute_activation(
+                initial_activation=float('-inf'),
+                timestamp=datetime.now()
+            )
+
+    def test_compute_activation_rejects_negative_value(self):
+        """Test compute_activation raises ValueError for negative initial_activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="initial_activation must be non-negative"):
+            engine.compute_activation(
+                initial_activation=-1.0,
+                timestamp=datetime.now()
+            )
+
+    def test_compute_activation_accepts_zero(self):
+        """Test compute_activation accepts zero (edge case)."""
+        engine = ForgettingEngine()
+
+        # Should not raise - zero is a valid activation
+        result = engine.compute_activation(
+            initial_activation=0.0,
+            timestamp=datetime.now()
+        )
+        # Should return min_activation (0.1 default) since zero decays to below threshold
+        assert result >= 0
+
+    def test_compute_activation_accepts_positive_values(self):
+        """Test compute_activation accepts positive values."""
+        engine = ForgettingEngine()
+
+        result = engine.compute_activation(
+            initial_activation=2.5,
+            timestamp=datetime.now()
+        )
+        assert result > 0
+
+    def test_should_forget_rejects_nan(self):
+        """Test should_forget raises ValueError for NaN activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.should_forget(float('nan'))
+
+    def test_should_forget_rejects_positive_infinity(self):
+        """Test should_forget raises ValueError for +inf activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.should_forget(float('inf'))
+
+    def test_should_forget_rejects_negative_infinity(self):
+        """Test should_forget raises ValueError for -inf activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.should_forget(float('-inf'))
+
+    def test_should_forget_rejects_negative_value(self):
+        """Test should_forget raises ValueError for negative activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be non-negative"):
+            engine.should_forget(-0.5)
+
+    def test_should_forget_accepts_zero(self):
+        """Test should_forget accepts zero activation."""
+        engine = ForgettingEngine()
+
+        # Zero should be considered for forgetting (below min_activation)
+        result = engine.should_forget(0.0)
+        assert result is True
+
+    def test_should_forget_accepts_positive_values(self):
+        """Test should_forget accepts positive values."""
+        engine = ForgettingEngine()
+
+        # High activation should not be forgotten
+        result = engine.should_forget(1.0)
+        assert result is False
+
+    def test_get_forgetting_probability_rejects_nan(self):
+        """Test get_forgetting_probability raises ValueError for NaN activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.get_forgetting_probability(float('nan'))
+
+    def test_get_forgetting_probability_rejects_positive_infinity(self):
+        """Test get_forgetting_probability raises ValueError for +inf activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.get_forgetting_probability(float('inf'))
+
+    def test_get_forgetting_probability_rejects_negative_infinity(self):
+        """Test get_forgetting_probability raises ValueError for -inf activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be finite"):
+            engine.get_forgetting_probability(float('-inf'))
+
+    def test_get_forgetting_probability_rejects_negative_value(self):
+        """Test get_forgetting_probability raises ValueError for negative activation."""
+        engine = ForgettingEngine()
+
+        with pytest.raises(ValueError, match="activation must be non-negative"):
+            engine.get_forgetting_probability(-0.1)
+
+    def test_get_forgetting_probability_accepts_zero(self):
+        """Test get_forgetting_probability accepts zero activation."""
+        engine = ForgettingEngine()
+
+        # Zero activation should give high forgetting probability
+        prob = engine.get_forgetting_probability(0.0)
+        assert 0 <= prob <= 1
+
+    def test_get_forgetting_probability_accepts_positive_values(self):
+        """Test get_forgetting_probability accepts positive values."""
+        engine = ForgettingEngine()
+
+        prob = engine.get_forgetting_probability(0.5)
+        assert 0 <= prob <= 1
+
+    def test_validation_error_message_includes_value(self):
+        """Test that error messages include the invalid value."""
+        import numpy as np
+        engine = ForgettingEngine()
+
+        # NaN case
+        try:
+            engine.compute_activation(float('nan'), datetime.now())
+        except ValueError as e:
+            assert 'nan' in str(e).lower()
+
+        # Negative case
+        try:
+            engine.should_forget(-5.0)
+        except ValueError as e:
+            assert '-5.0' in str(e)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

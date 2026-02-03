@@ -59,7 +59,20 @@ class ForgettingEngine:
 
         Returns:
             Current activation level
+
+        Raises:
+            ValueError: If initial_activation is not finite or is negative
         """
+        # Validate initial_activation: must be finite and non-negative
+        if not np.isfinite(initial_activation):
+            raise ValueError(
+                f"initial_activation must be finite, got {initial_activation}"
+            )
+        if initial_activation < 0:
+            raise ValueError(
+                f"initial_activation must be non-negative, got {initial_activation}"
+            )
+
         current_time = current_time or datetime.now()
         time_elapsed = (current_time - timestamp).total_seconds() / 3600  # hours
 
@@ -72,7 +85,9 @@ class ForgettingEngine:
             activation = boosted_activation * ((1 + time_elapsed) ** (-self.config.decay_rate))
         else:
             # Exponential decay: A(t) = A0 * e^(-dt)
-            activation = boosted_activation * np.exp(-self.config.decay_rate * time_elapsed)
+            # Clip exponent to prevent underflow (exp(-500) -> 0, exp(500) -> overflow)
+            decay_exponent = np.clip(-self.config.decay_rate * time_elapsed, -500, 0)
+            activation = boosted_activation * np.exp(decay_exponent)
 
         return float(max(activation, self.config.min_activation))
 
@@ -88,7 +103,20 @@ class ForgettingEngine:
 
         Returns:
             True if activation below threshold
+
+        Raises:
+            ValueError: If activation is not finite or is negative
         """
+        # Validate activation: must be finite and non-negative
+        if not np.isfinite(activation):
+            raise ValueError(
+                f"activation must be finite, got {activation}"
+            )
+        if activation < 0:
+            raise ValueError(
+                f"activation must be non-negative, got {activation}"
+            )
+
         return activation < self.config.min_activation
 
     def get_forgetting_probability(
@@ -98,15 +126,36 @@ class ForgettingEngine:
         """
         Probability of forgetting given activation.
 
+        Uses sigmoid function around min_activation threshold.
+        Higher activation = lower forgetting probability.
+
         Args:
             activation: Current activation level
 
         Returns:
             Probability in [0, 1]
+
+        Raises:
+            ValueError: If activation is not finite or is negative
         """
+        # Validate activation: must be finite and non-negative
+        if not np.isfinite(activation):
+            raise ValueError(
+                f"activation must be finite, got {activation}"
+            )
+        if activation < 0:
+            raise ValueError(
+                f"activation must be non-negative, got {activation}"
+            )
+
         # Sigmoid function around min_activation threshold
-        x = (activation - self.config.min_activation) / self.config.min_activation
-        prob = 1 / (1 + np.exp(x * 5))  # Steepness = 5
+        x = (activation - self.config.min_activation) / max(self.config.min_activation, 1e-10)
+
+        # Clip to prevent numerical overflow in exp()
+        # exp(500) overflows, exp(-500) underflows to 0 (safe)
+        x_scaled = np.clip(x * 5, -500, 500)
+
+        prob = 1 / (1 + np.exp(x_scaled))
         return float(prob)
 
 
@@ -259,7 +308,10 @@ class EbbinghausForgetting:
         time_elapsed_hours = max(0, time_elapsed_hours)
 
         # Ebbinghaus formula: R = e^(-t/S)
-        retention = np.exp(-time_elapsed_hours / state.stability_score)
+        # Prevent division by zero and overflow
+        stability = max(state.stability_score, 1e-10)
+        exponent = np.clip(-time_elapsed_hours / stability, -500, 0)
+        retention = np.exp(exponent)
 
         # Scale by initial retention
         retention = retention * state.initial_retention

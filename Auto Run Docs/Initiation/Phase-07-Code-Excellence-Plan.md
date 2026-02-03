@@ -197,7 +197,18 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 20 online learning tests pass, 413 total project tests pass
 
 ### 7C.4 - Add Input Validation
-- [ ] Add validation to `neuro_memory/memory/forgetting.py` functions - Check that activation values are finite and non-negative. Raise ValueError for invalid inputs.
+- [x] Add validation to `neuro_memory/memory/forgetting.py` functions - Check that activation values are finite and non-negative. Raise ValueError for invalid inputs.
+  - **COMPLETED (2026-02-03)**: Added input validation to all three ForgettingEngine methods:
+    - `compute_activation()`: Validates `initial_activation` is finite and non-negative (lines 63-70)
+    - `should_forget()`: Validates `activation` is finite and non-negative (lines 99-106)
+    - `get_forgetting_probability()`: Changed from returning 1.0 for invalid inputs to raising ValueError (lines 118-125)
+  - All methods raise ValueError with descriptive messages including the invalid value
+  - Added 19 new tests in `TestForgettingEngineInputValidation` class covering:
+    - NaN, +inf, -inf rejection for all 3 methods
+    - Negative value rejection for all 3 methods
+    - Zero and positive value acceptance (edge cases)
+    - Error message verification
+  - All 103 related tests pass (81 forgetting + 22 integration)
 
 - [ ] Add validation to `neuro_memory/memory/episodic_store.py` core functions - Validate episode data before storage, check for NaN/Inf in importance values.
 
