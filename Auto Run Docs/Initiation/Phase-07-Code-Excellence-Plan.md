@@ -172,7 +172,19 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 25 tests pass, 364 total project tests pass
 
 ### 7C.2 - Fix Memory Leaks in Consolidation
-- [ ] In `neuro_memory/memory/episodic_store.py` lines 678-692 - When offloading episodes during consolidation, clean up all related index entries (temporal, spatial, entity indices). Add garbage collection trigger after bulk removal.
+- [x] In `neuro_memory/memory/episodic_store.py` lines 678-692 - When offloading episodes during consolidation, clean up all related index entries (temporal, spatial, entity indices). Add garbage collection trigger after bulk removal.
+  - **COMPLETED (2026-02-03)**: Implemented comprehensive index cleanup during consolidation:
+    - Added `gc` import for garbage collection
+    - Created `_remove_from_indices(episode)` method to remove episode from temporal, spatial, and entity indices
+    - Created `_remove_from_vector_db(episode_ids)` method to batch-remove episodes from ChromaDB
+    - Updated `_consolidate_memory()` to call `_remove_from_indices()` for each offloaded episode, then `_remove_from_vector_db()` for batch cleanup, then `gc.collect()` to free memory
+    - Updated `_process_forgetting()` to also clean up indices and vector DB when episodes are forgotten
+    - Added 4 new tests in `TestIndexCleanupDuringConsolidation` class:
+      - `test_consolidation_cleans_up_indices`: Verifies offloaded episodes are removed from all indices
+      - `test_remove_from_indices_removes_single_episode`: Verifies single episode removal
+      - `test_remove_from_indices_idempotent`: Verifies double removal is safe
+      - `test_offloaded_episodes_exist_on_disk`: Verifies episodes are offloaded to disk
+  - All 22 episodic memory integration tests pass
 
 ### 7C.3 - Fix Division by Zero
 - [ ] Fix `neuro_memory/online_learning.py:119` - Add check for zero sum before division: `sum_priorities = np.sum(priorities); probabilities = np.ones_like(priorities) / len(priorities) if sum_priorities == 0 else priorities / sum_priorities`.

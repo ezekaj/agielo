@@ -18,6 +18,7 @@ Key Features:
 5. Automatic memory consolidation and pruning
 """
 
+import gc
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
@@ -340,10 +341,24 @@ class EpisodicMemoryStore:
             self.reinforced_memories_count += 1
 
         # Offload forgotten episodes to disk (outside lock - I/O shouldn't hold lock)
-        for memory_id, episode in episodes_to_forget:
-            self.forgotten_memories_count += 1
-            if self.config.enable_disk_offload:
-                self._offload_episode(episode)
+        if episodes_to_forget:
+            forgotten_ids = []
+
+            for memory_id, episode in episodes_to_forget:
+                self.forgotten_memories_count += 1
+
+                # Remove from all indices to prevent memory leaks
+                self._remove_from_indices(episode)
+                forgotten_ids.append(memory_id)
+
+                if self.config.enable_disk_offload:
+                    self._offload_episode(episode)
+
+            # Remove from vector database in batch
+            self._remove_from_vector_db(forgotten_ids)
+
+            # Trigger garbage collection after bulk removal
+            gc.collect()
 
     def _should_reinforce_memory(self, episode: Episode) -> bool:
         """
@@ -578,18 +593,76 @@ class EpisodicMemoryStore:
         if date_key not in self.temporal_index:
             self.temporal_index[date_key] = []
         self.temporal_index[date_key].append(episode.episode_id)
-        
+
         # Spatial index
         if episode.location:
             if episode.location not in self.spatial_index:
                 self.spatial_index[episode.location] = []
             self.spatial_index[episode.location].append(episode.episode_id)
-        
+
         # Entity index
         for entity in episode.entities:
             if entity not in self.entity_index:
                 self.entity_index[entity] = []
             self.entity_index[entity].append(episode.episode_id)
+
+    def _remove_from_indices(self, episode: Episode):
+        """
+        Remove episode from all indices to prevent memory leaks.
+
+        Called when episodes are offloaded or forgotten to ensure
+        index entries don't hold stale references.
+        """
+        episode_id = episode.episode_id
+
+        # Remove from temporal index
+        date_key = episode.timestamp.strftime("%Y-%m-%d")
+        if date_key in self.temporal_index:
+            try:
+                self.temporal_index[date_key].remove(episode_id)
+                # Clean up empty date entries
+                if not self.temporal_index[date_key]:
+                    del self.temporal_index[date_key]
+            except ValueError:
+                pass  # Episode ID not in list (already removed)
+
+        # Remove from spatial index
+        if episode.location and episode.location in self.spatial_index:
+            try:
+                self.spatial_index[episode.location].remove(episode_id)
+                # Clean up empty location entries
+                if not self.spatial_index[episode.location]:
+                    del self.spatial_index[episode.location]
+            except ValueError:
+                pass  # Episode ID not in list
+
+        # Remove from entity index
+        for entity in episode.entities:
+            if entity in self.entity_index:
+                try:
+                    self.entity_index[entity].remove(episode_id)
+                    # Clean up empty entity entries
+                    if not self.entity_index[entity]:
+                        del self.entity_index[entity]
+                except ValueError:
+                    pass  # Episode ID not in list
+
+    def _remove_from_vector_db(self, episode_ids: List[str]):
+        """
+        Remove episodes from vector database.
+
+        Args:
+            episode_ids: List of episode IDs to remove
+        """
+        if not episode_ids:
+            return
+
+        if self.config.vector_db_backend == "chromadb":
+            try:
+                self.collection.delete(ids=episode_ids)
+            except Exception as e:
+                # Log but don't fail - episode may already be removed
+                print(f"[EpisodicMemoryStore] Warning: Failed to delete from ChromaDB: {e}")
     
     def _add_to_vector_db(self, episode: Episode):
         """Add episode to vector database for similarity search."""
@@ -723,10 +796,18 @@ class EpisodicMemoryStore:
         """
         Consolidate memory by offloading low-importance episodes to disk.
         Mimics hippocampal consolidation: important memories stay, others archived.
+
+        Memory Cleanup:
+            When episodes are offloaded, this method also:
+            1. Removes episodes from temporal, spatial, and entity indices
+            2. Removes episodes from the vector database
+            3. Triggers garbage collection after bulk removal to free memory
         """
         if not self.config.enable_disk_offload:
             return
-        
+
+        episodes_to_offload = []
+
         # Decay importance of all episodes
         # Thread-safe consolidation
         with self._episodes_lock:
@@ -742,11 +823,25 @@ class EpisodicMemoryStore:
                 episodes_to_offload = self.episodes[-n_to_offload:]
                 self.episodes = self.episodes[:-n_to_offload]
 
-        # Offload outside lock to avoid holding lock during I/O
-        if n_to_offload > 0:
+        # Cleanup and offload outside lock to avoid holding lock during I/O
+        if episodes_to_offload:
+            offloaded_ids = []
+
             for episode in episodes_to_offload:
+                # Remove from all indices to prevent memory leaks
+                self._remove_from_indices(episode)
+                offloaded_ids.append(episode.episode_id)
+
+                # Offload to disk
                 self._offload_episode(episode)
                 self.episodes_offloaded += 1
+
+            # Remove from vector database in batch for efficiency
+            self._remove_from_vector_db(offloaded_ids)
+
+            # Trigger garbage collection after bulk removal to free memory
+            # This helps reclaim memory from the removed episodes and index entries
+            gc.collect()
     
     def _offload_episode(self, episode: Episode):
         """Offload episode to disk storage."""

@@ -376,6 +376,164 @@ class TestIntegrationWithRetentionDecay:
         assert retention_after_retrieval > retention_after_12h
 
 
+class TestIndexCleanupDuringConsolidation:
+    """Test that indices are properly cleaned up when episodes are offloaded."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory."""
+        temp = tempfile.mkdtemp()
+        yield temp
+        shutil.rmtree(temp, ignore_errors=True)
+
+    def test_consolidation_cleans_up_indices(self, temp_dir):
+        """Test that offloading during consolidation removes index entries."""
+        # Create a store with low max_episodes to trigger consolidation
+        # Note: offload_threshold triggers consolidation, which then reduces to max_episodes
+        config = EpisodicMemoryConfig(
+            max_episodes=5,  # Only keep 5 episodes after consolidation
+            offload_threshold=8,  # Trigger offload check at 8 episodes
+            persistence_path=temp_dir,
+            enable_disk_offload=True,
+            enable_ebbinghaus=False  # Disable Ebbinghaus to simplify test
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store 12 episodes with various locations and entities
+        # This ensures multiple consolidation triggers
+        stored_episodes = []
+        for i in range(12):
+            content = np.random.randn(10)
+            episode = store.store_episode(
+                content=content,
+                surprise=float(i) * 0.1,  # Lower surprise = lower importance
+                location=f"location_{i % 3}",
+                entities=[f"entity_{i % 2}"]
+            )
+            stored_episodes.append(episode)
+
+        # Consolidation should have been triggered and some episodes offloaded
+        # The exact number depends on when consolidation triggers, but offloading
+        # should have occurred
+        assert store.episodes_offloaded > 0, "No episodes were offloaded"
+
+        # Get the IDs of episodes still in memory
+        in_memory_ids = {ep.episode_id for ep in store.episodes}
+
+        # Check that offloaded episodes are NOT in temporal index
+        for episode in stored_episodes:
+            if episode.episode_id not in in_memory_ids:
+                date_key = episode.timestamp.strftime("%Y-%m-%d")
+                if date_key in store.temporal_index:
+                    assert episode.episode_id not in store.temporal_index[date_key], \
+                        f"Offloaded episode {episode.episode_id} still in temporal index"
+
+        # Check that offloaded episodes are NOT in spatial index
+        for episode in stored_episodes:
+            if episode.episode_id not in in_memory_ids:
+                if episode.location and episode.location in store.spatial_index:
+                    assert episode.episode_id not in store.spatial_index[episode.location], \
+                        f"Offloaded episode {episode.episode_id} still in spatial index"
+
+        # Check that offloaded episodes are NOT in entity index
+        for episode in stored_episodes:
+            if episode.episode_id not in in_memory_ids:
+                for entity in episode.entities:
+                    if entity in store.entity_index:
+                        assert episode.episode_id not in store.entity_index[entity], \
+                            f"Offloaded episode {episode.episode_id} still in entity index for {entity}"
+
+    def test_remove_from_indices_removes_single_episode(self, temp_dir):
+        """Test _remove_from_indices correctly removes a single episode."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store an episode
+        content = np.random.randn(10)
+        episode = store.store_episode(
+            content=content,
+            surprise=1.0,
+            location="test_location",
+            entities=["entity_a", "entity_b"]
+        )
+
+        # Verify it's in indices
+        date_key = episode.timestamp.strftime("%Y-%m-%d")
+        assert episode.episode_id in store.temporal_index[date_key]
+        assert episode.episode_id in store.spatial_index["test_location"]
+        assert episode.episode_id in store.entity_index["entity_a"]
+        assert episode.episode_id in store.entity_index["entity_b"]
+
+        # Remove from indices
+        store._remove_from_indices(episode)
+
+        # Verify it's removed (and empty keys are cleaned up)
+        assert date_key not in store.temporal_index or \
+            episode.episode_id not in store.temporal_index.get(date_key, [])
+        assert "test_location" not in store.spatial_index or \
+            episode.episode_id not in store.spatial_index.get("test_location", [])
+        assert "entity_a" not in store.entity_index or \
+            episode.episode_id not in store.entity_index.get("entity_a", [])
+        assert "entity_b" not in store.entity_index or \
+            episode.episode_id not in store.entity_index.get("entity_b", [])
+
+    def test_remove_from_indices_idempotent(self, temp_dir):
+        """Test that removing same episode twice doesn't cause errors."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        content = np.random.randn(10)
+        episode = store.store_episode(
+            content=content,
+            surprise=1.0,
+            location="test_location",
+            entities=["entity_a"]
+        )
+
+        # Remove twice - should not raise
+        store._remove_from_indices(episode)
+        store._remove_from_indices(episode)  # Second call should be safe
+
+    def test_offloaded_episodes_exist_on_disk(self, temp_dir):
+        """Test that offloaded episodes are saved to disk."""
+        config = EpisodicMemoryConfig(
+            max_episodes=5,
+            offload_threshold=8,
+            persistence_path=temp_dir,
+            enable_disk_offload=True,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store enough to trigger offloading
+        stored_episodes = []
+        for i in range(10):
+            content = np.random.randn(10)
+            episode = store.store_episode(
+                content=content,
+                surprise=float(i) * 0.1,
+                location=f"location_{i}"
+            )
+            stored_episodes.append(episode)
+
+        # Check offload directory
+        offload_dir = Path(temp_dir) / "offloaded"
+        assert offload_dir.exists()
+
+        # Some episodes should be offloaded to disk
+        offloaded_files = list(offload_dir.glob("*.pkl"))
+        assert len(offloaded_files) > 0, "No episodes were offloaded to disk"
+
+        # Number offloaded should equal episodes_offloaded counter
+        assert store.episodes_offloaded == len(offloaded_files)
+
+
 class TestVectorDBBackendValidation:
     """Test vector database backend selection and validation."""
 
