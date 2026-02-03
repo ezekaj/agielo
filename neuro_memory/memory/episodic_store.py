@@ -18,8 +18,10 @@ Key Features:
 5. Automatic memory consolidation and pruning
 """
 
+import atexit
 import gc
 import numpy as np
+import weakref
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,6 +43,27 @@ from neuro_memory.memory.forgetting import (
 
 # Import numerical stability utilities for validation
 from utils.numerical import validate_finite
+
+
+# Track instances for atexit cleanup using weak references
+_episodic_memory_instances: List[weakref.ref] = []
+
+
+def _cleanup_all_instances():
+    """Cleanup function called at program exit to save all EpisodicMemoryStore state."""
+    for ref in _episodic_memory_instances:
+        instance = ref()
+        if instance is not None:
+            instance.cleanup()
+
+
+# Register the cleanup function with atexit
+atexit.register(_cleanup_all_instances)
+
+
+def _register_instance(instance: 'EpisodicMemoryStore'):
+    """Register an EpisodicMemoryStore instance for cleanup on exit."""
+    _episodic_memory_instances.append(weakref.ref(instance))
 
 
 @dataclass
@@ -184,7 +207,10 @@ class EpisodicMemoryStore:
 
         if self.config.enable_ebbinghaus:
             self._initialize_ebbinghaus()
-        
+
+        # Register for cleanup on program exit
+        _register_instance(self)
+
     def _initialize_vector_db(self):
         """Initialize vector database for similarity search."""
         backend = self.config.vector_db_backend
@@ -1049,6 +1075,47 @@ class EpisodicMemoryStore:
             stats["review_success_rate"] = sr_stats.get("success_rate", 0.0)
 
         return stats
+
+    def cleanup(self):
+        """
+        Cleanup resources and save state on exit.
+
+        This method is registered with atexit to ensure state is saved
+        when the program terminates. It:
+        1. Stops the background forgetting thread if running
+        2. Saves all memory state to disk
+        3. Saves Ebbinghaus forgetting system state
+        4. Saves spaced repetition scheduler state
+        """
+        try:
+            # Stop the background forgetting thread first
+            if self._forgetting_running:
+                self.stop_forgetting_background_task()
+
+            # Save memory state to disk (thread-safe, handles persistence_path check internally)
+            self.save_state()
+
+            # Save Ebbinghaus forgetting state if enabled
+            if self.ebbinghaus is not None:
+                try:
+                    self.ebbinghaus.save_state()
+                except Exception as e:
+                    print(f"[EpisodicMemoryStore] Ebbinghaus cleanup error: {e}")
+
+            # Save spaced repetition state if enabled
+            if self.spaced_repetition is not None:
+                try:
+                    self.spaced_repetition.save_state()
+                except Exception as e:
+                    print(f"[EpisodicMemoryStore] Spaced repetition cleanup error: {e}")
+
+            # Report what was saved
+            with self._episodes_lock:
+                episodes_count = len(self.episodes)
+            print(f"[EpisodicMemoryStore] Cleanup complete: saved {episodes_count} episodes, "
+                  f"{self.total_episodes_stored} total stored, {self.episodes_offloaded} offloaded")
+        except Exception as e:
+            print(f"[EpisodicMemoryStore] Cleanup error: {e}")
 
 
 if __name__ == "__main__":

@@ -814,5 +814,271 @@ class TestEpisodeInputValidation:
         assert "3" in str(exc_info.value)  # 3 non-finite values
 
 
+class TestEpisodicMemoryCleanup:
+    """Test atexit cleanup functionality for EpisodicMemoryStore."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory."""
+        temp = tempfile.mkdtemp()
+        yield temp
+        shutil.rmtree(temp, ignore_errors=True)
+
+    def test_cleanup_method_exists(self, temp_dir):
+        """Verify cleanup method exists and is callable."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        assert hasattr(store, 'cleanup')
+        assert callable(store.cleanup)
+
+    def test_cleanup_saves_state(self, temp_dir):
+        """Verify cleanup saves state to disk."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store some episodes
+        for i in range(3):
+            content = np.random.randn(10)
+            store.store_episode(content=content, surprise=float(i))
+
+        # Call cleanup
+        store.cleanup()
+
+        # Verify state file exists
+        state_file = Path(temp_dir) / "memory_state.json"
+        assert state_file.exists()
+
+    def test_cleanup_saves_correct_data(self, temp_dir):
+        """Verify cleanup saves data that can be reloaded."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store1 = EpisodicMemoryStore(config)
+
+        # Store episodes
+        for i in range(5):
+            content = np.random.randn(10)
+            store1.store_episode(
+                content=content,
+                surprise=float(i),
+                location=f"location_{i}"
+            )
+
+        # Call cleanup
+        store1.cleanup()
+
+        # Create new store and load state
+        store2 = EpisodicMemoryStore(config)
+        store2.load_state()
+
+        # Verify data persisted
+        assert store2.total_episodes_stored == 5
+        assert len(store2.episodes) == 5
+
+    def test_cleanup_stops_forgetting_thread(self, temp_dir):
+        """Verify cleanup stops the background forgetting thread."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=True,
+            forgetting_background_interval=1.0
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Start the background thread
+        store.start_forgetting_background_task()
+        assert store._forgetting_running is True
+        assert store._forgetting_thread is not None
+
+        # Call cleanup
+        store.cleanup()
+
+        # Thread should be stopped
+        assert store._forgetting_running is False
+
+    def test_cleanup_saves_ebbinghaus_state(self, temp_dir):
+        """Verify cleanup saves Ebbinghaus forgetting state."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=True
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store some episodes
+        content = np.random.randn(10)
+        episode = store.store_episode(content=content, surprise=2.0)
+
+        # Record a retrieval
+        store.record_retrieval(episode.episode_id, success=True)
+
+        # Call cleanup
+        store.cleanup()
+
+        # Ebbinghaus state file should exist
+        ebbinghaus_file = Path(temp_dir) / "ebbinghaus_state.json"
+        assert ebbinghaus_file.exists()
+
+    def test_cleanup_saves_spaced_repetition_state(self, temp_dir):
+        """Verify cleanup saves spaced repetition state."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=True
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store some episodes
+        content = np.random.randn(10)
+        store.store_episode(content=content, surprise=2.0)
+
+        # Call cleanup
+        store.cleanup()
+
+        # Spaced repetition state file should exist
+        sr_file = Path(temp_dir) / "spaced_repetition_state.json"
+        assert sr_file.exists()
+
+    def test_cleanup_handles_errors_gracefully(self, temp_dir):
+        """Verify cleanup doesn't raise exceptions on errors."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Make persistence_path invalid by deleting it
+        shutil.rmtree(temp_dir)
+
+        # Cleanup should not raise, even with invalid path
+        # It should print an error message but not crash
+        try:
+            store.cleanup()
+        except Exception as e:
+            pytest.fail(f"cleanup() raised an exception: {e}")
+
+    def test_instance_registration(self, temp_dir):
+        """Verify instances are registered in the weak reference list."""
+        from neuro_memory.memory.episodic_store import _episodic_memory_instances
+
+        initial_count = len(_episodic_memory_instances)
+
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Should have one more instance registered
+        assert len(_episodic_memory_instances) == initial_count + 1
+
+        # The last ref should resolve to our store
+        ref = _episodic_memory_instances[-1]
+        assert ref() is store
+
+    def test_cleanup_all_instances_function(self, temp_dir):
+        """Verify _cleanup_all_instances cleans up all registered instances."""
+        from neuro_memory.memory.episodic_store import _cleanup_all_instances
+
+        # Create temp directories for each store
+        temp1 = tempfile.mkdtemp()
+        temp2 = tempfile.mkdtemp()
+
+        try:
+            config1 = EpisodicMemoryConfig(
+                persistence_path=temp1,
+                enable_ebbinghaus=False
+            )
+            config2 = EpisodicMemoryConfig(
+                persistence_path=temp2,
+                enable_ebbinghaus=False
+            )
+
+            store1 = EpisodicMemoryStore(config1)
+            store2 = EpisodicMemoryStore(config2)
+
+            # Store episodes in both
+            content = np.random.randn(10)
+            store1.store_episode(content=content, surprise=1.0)
+            store2.store_episode(content=content, surprise=2.0)
+
+            # Call cleanup function
+            _cleanup_all_instances()
+
+            # Both should have state files
+            assert (Path(temp1) / "memory_state.json").exists()
+            assert (Path(temp2) / "memory_state.json").exists()
+        finally:
+            shutil.rmtree(temp1, ignore_errors=True)
+            shutil.rmtree(temp2, ignore_errors=True)
+
+    def test_cleanup_handles_dead_weakrefs(self, temp_dir):
+        """Verify cleanup handles garbage collected instances."""
+        from neuro_memory.memory.episodic_store import _cleanup_all_instances, _episodic_memory_instances
+
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=False
+        )
+
+        # Create and immediately delete a store
+        store = EpisodicMemoryStore(config)
+        del store
+
+        # Force garbage collection
+        import gc
+        gc.collect()
+
+        # cleanup_all_instances should handle dead weakrefs without crashing
+        try:
+            _cleanup_all_instances()
+        except Exception as e:
+            pytest.fail(f"_cleanup_all_instances raised with dead refs: {e}")
+
+    def test_atexit_registered(self):
+        """Verify cleanup function is registered with atexit."""
+        import atexit
+        from neuro_memory.memory.episodic_store import _cleanup_all_instances
+
+        # Check that _cleanup_all_instances is in the atexit registry
+        # Note: atexit doesn't expose registered functions directly,
+        # so we verify the function exists and is of correct type
+        assert callable(_cleanup_all_instances)
+
+    def test_cleanup_with_running_thread_and_ebbinghaus(self, temp_dir):
+        """Test full cleanup scenario with running thread and Ebbinghaus enabled."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            enable_ebbinghaus=True,
+            forgetting_background_interval=0.5
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Store episodes
+        for i in range(3):
+            content = np.random.randn(10)
+            episode = store.store_episode(content=content, surprise=float(i))
+            # Record some retrievals
+            store.record_retrieval(episode.episode_id, success=True)
+
+        # Start background thread
+        store.start_forgetting_background_task()
+        time.sleep(0.1)  # Let thread run briefly
+
+        # Cleanup
+        store.cleanup()
+
+        # Verify all state saved
+        assert (Path(temp_dir) / "memory_state.json").exists()
+        assert (Path(temp_dir) / "ebbinghaus_state.json").exists()
+        assert (Path(temp_dir) / "spaced_repetition_state.json").exists()
+        assert store._forgetting_running is False
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

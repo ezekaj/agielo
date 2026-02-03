@@ -316,7 +316,27 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
       - `TestAutonomousWorkerBasics`: 8 tests for basic functionality
   - All 19 autonomous worker tests pass
 
-- [ ] Add `atexit` cleanup to `neuro_memory/memory/episodic_store.py` - Stop background forgetting thread and save state on exit.
+- [x] Add `atexit` cleanup to `neuro_memory/memory/episodic_store.py` - Stop background forgetting thread and save state on exit.
+  - **COMPLETED (2026-02-03)**: Implemented atexit cleanup handler for EpisodicMemoryStore:
+    - Added `import atexit` and `import weakref` at module level
+    - Created `cleanup()` method that stops forgetting background thread, saves memory state, saves Ebbinghaus state, and saves spaced repetition state
+    - Created `_episodic_memory_instances` list with weak references to track all instances
+    - Created `_cleanup_all_instances()` function registered with `atexit.register()` to cleanup all instances on program exit
+    - Created `_register_instance()` function to register instances on creation (called in `__init__`)
+    - Added 12 new tests in `TestEpisodicMemoryCleanup` class:
+      - `test_cleanup_method_exists`: Verifies cleanup method exists and is callable
+      - `test_cleanup_saves_state`: Verifies state is saved to disk
+      - `test_cleanup_saves_correct_data`: Verifies persisted data can be reloaded
+      - `test_cleanup_stops_forgetting_thread`: Verifies running background thread is stopped
+      - `test_cleanup_saves_ebbinghaus_state`: Verifies Ebbinghaus state is saved
+      - `test_cleanup_saves_spaced_repetition_state`: Verifies spaced repetition state is saved
+      - `test_cleanup_handles_errors_gracefully`: Verifies errors don't raise exceptions
+      - `test_instance_registration`: Verifies instances are registered in the weak reference list
+      - `test_cleanup_all_instances_function`: Verifies all instances are cleaned up
+      - `test_cleanup_handles_dead_weakrefs`: Verifies garbage collected instances don't cause errors
+      - `test_atexit_registered`: Verifies cleanup function exists and is callable
+      - `test_cleanup_with_running_thread_and_ebbinghaus`: Full integration test with thread and Ebbinghaus
+  - All 56 episodic memory integration tests pass
 
 ### 7D.3 - Replace Magic Numbers with Constants
 - [ ] Create `config/constants.py` with all magic numbers as named constants with documentation: `EXPOSURE_DECAY_RATE = 0.1`, `DEFAULT_DECAY_RATE = 0.5`, `IMPORTANCE_SIGMOID_SCALE = 2.0`, `BAYESIAN_SURPRISE_PERCENTILE = 75`, etc.
