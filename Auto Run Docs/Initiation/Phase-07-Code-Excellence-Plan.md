@@ -339,9 +339,23 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 56 episodic memory integration tests pass
 
 ### 7D.3 - Replace Magic Numbers with Constants
-- [ ] Create `config/constants.py` with all magic numbers as named constants with documentation: `EXPOSURE_DECAY_RATE = 0.1`, `DEFAULT_DECAY_RATE = 0.5`, `IMPORTANCE_SIGMOID_SCALE = 2.0`, `BAYESIAN_SURPRISE_PERCENTILE = 75`, etc.
+- [x] Create `config/constants.py` with all magic numbers as named constants with documentation: `EXPOSURE_DECAY_RATE = 0.1`, `DEFAULT_DECAY_RATE = 0.5`, `IMPORTANCE_SIGMOID_SCALE = 2.0`, `BAYESIAN_SURPRISE_PERCENTILE = 75`, etc.
+  - **COMPLETED (2026-02-03)**: Created `config/constants.py` with 55+ named constants organized by category:
+    - Memory Forgetting: `DEFAULT_DECAY_RATE`, `REHEARSAL_BOOST_MULTIPLIER`, `MIN_ACTIVATION_THRESHOLD`, `BASE_STABILITY_HOURS`, `STABILITY_MULTIPLIER`, `MIN_STABILITY_HOURS`, `MAX_STABILITY_HOURS`, `FORGET_RETENTION_THRESHOLD`, `IMMEDIATE_REVIEW_DELAY_HOURS`
+    - Active Learning: `EXPOSURE_DECAY_RATE`, `UNCERTAINTY_PRIORITY_WEIGHT`, `CURIOSITY_PRIORITY_WEIGHT`, `NOVELTY_PRIORITY_WEIGHT`, `DEFAULT_TOPIC_CONFIDENCE`, `DEFAULT_TOPIC_CURIOSITY`, `RND_CURIOSITY_WEIGHT`, `RND_HIGH_CURIOSITY_THRESHOLD`, `LOW_CURIOSITY_THRESHOLD`, `KNOWN_TOPIC_PRIORITY_FACTOR`, `DEFAULT_CURIOSITY_BOOST`, `HIGH_CONFIDENCE_THRESHOLD`, `CURIOSITY_DECAY_WEIGHT`, `CURIOSITY_UPDATE_WEIGHT`
+    - Bayesian Surprise: `SURPRISE_WINDOW_SIZE`, `SURPRISE_ENCODING_THRESHOLD`, `MIN_SURPRISE_OBSERVATIONS`, `SURPRISE_SMOOTHING_ALPHA`, `BAYESIAN_SURPRISE_PERCENTILE`, `DEFAULT_OBSERVATION_VARIANCE`
+    - Episodic Memory: `DEFAULT_EPISODE_IMPORTANCE`, `IMPORTANCE_DECAY_FACTOR`, `FORGETTING_BACKGROUND_INTERVAL_SECONDS`, `REVIEW_RETENTION_THRESHOLD`, `FORGETTING_THREAD_TIMEOUT_SECONDS`, `HIGH_IMPORTANCE_THRESHOLD`, `INITIAL_RETENTION_BASE`, `INITIAL_RETENTION_IMPORTANCE_FACTOR`, `IMPORTANCE_SIGMOID_OFFSET`
+    - Numerical Stability: `EXP_CLIP_MIN`, `EXP_CLIP_MAX`, `EPSILON`, `DEFAULT_SUCCESS_RATE`
+    - Predictive Model: `DEFAULT_LSTM_HIDDEN_DIM`, `DEFAULT_LSTM_NUM_LAYERS`, `LSTM_DROPOUT_RATE`
+  - Updated `config/__init__.py` to export all constants for easy importing
 
-- [ ] Update `active_learning.py:69`, `forgetting.py:25`, `episodic_store.py:495`, `bayesian_surprise.py:307` and other files to use these constants.
+- [x] Update `active_learning.py:69`, `forgetting.py:25`, `episodic_store.py:495`, `bayesian_surprise.py:307` and other files to use these constants.
+  - **COMPLETED (2026-02-03)**: Updated 4 files to use named constants:
+    - `integrations/active_learning.py`: 10 magic numbers replaced with constants (Topic defaults, learning priority weights, RND thresholds, curiosity weights)
+    - `neuro_memory/memory/forgetting.py`: 9 magic numbers replaced (ForgettingConfig, EbbinghausConfig, SpacedRepetitionConfig defaults)
+    - `neuro_memory/memory/episodic_store.py`: 11 magic numbers replaced (Episode defaults, EpisodicMemoryConfig, importance computation)
+    - `neuro_memory/surprise/bayesian_surprise.py`: 7 magic numbers replaced (SurpriseConfig, PredictiveModel, observation variance, percentile)
+  - All 169 related tests pass (32 active_learning, 81 forgetting, 56 episodic memory)
 
 ### 7D.4 - Add Missing Type Hints
 - [ ] Add type hints to all public functions in `integrations/active_learning.py` - Especially `set_llm_interface()` and callback functions.

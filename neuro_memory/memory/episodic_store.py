@@ -44,6 +44,21 @@ from neuro_memory.memory.forgetting import (
 # Import numerical stability utilities for validation
 from utils.numerical import validate_finite
 
+# Import constants from config
+from config.constants import (
+    DEFAULT_EPISODE_IMPORTANCE,
+    IMPORTANCE_DECAY_FACTOR,
+    FORGETTING_BACKGROUND_INTERVAL_SECONDS,
+    REVIEW_RETENTION_THRESHOLD,
+    FORGETTING_THREAD_TIMEOUT_SECONDS,
+    HIGH_IMPORTANCE_THRESHOLD,
+    INITIAL_RETENTION_BASE,
+    INITIAL_RETENTION_IMPORTANCE_FACTOR,
+    IMPORTANCE_SIGMOID_OFFSET,
+    EXP_CLIP_MIN,
+    EXP_CLIP_MAX,
+)
+
 
 # Track instances for atexit cleanup using weak references
 _episodic_memory_instances: List[weakref.ref] = []
@@ -87,7 +102,7 @@ class Episode:
     entities: List[str] = field(default_factory=list)
     embedding: Optional[np.ndarray] = None
     surprise: float = 0.0
-    importance: float = 0.5
+    importance: float = DEFAULT_EPISODE_IMPORTANCE
     metadata: Dict[str, Any] = field(default_factory=dict)
     episode_id: Optional[str] = None
     
@@ -124,7 +139,7 @@ class Episode:
             entities=data.get("entities", []),
             embedding=np.array(data["embedding"]) if data.get("embedding") else None,
             surprise=data.get("surprise", 0.0),
-            importance=data.get("importance", 0.5),
+            importance=data.get("importance", DEFAULT_EPISODE_IMPORTANCE),
             metadata=data.get("metadata", {}),
             episode_id=data.get("episode_id")
         )
@@ -137,14 +152,14 @@ class EpisodicMemoryConfig:
     embedding_dim: int = 512  # Dimension of episode embeddings
     enable_disk_offload: bool = True  # Offload old episodes to disk
     offload_threshold: int = 8000  # Start offloading when this many episodes
-    importance_decay: float = 0.99  # Decay factor for episode importance
+    importance_decay: float = IMPORTANCE_DECAY_FACTOR  # Decay factor for episode importance
     consolidation_interval: int = 100  # Consolidate every N new episodes
     vector_db_backend: str = "chromadb"  # "chromadb" or "faiss"
     persistence_path: Optional[str] = "./memory_store"  # Path for persistent storage
     # Ebbinghaus forgetting settings
     enable_ebbinghaus: bool = True  # Enable Ebbinghaus forgetting model
-    forgetting_background_interval: float = 3600.0  # Run forgetting task every hour (seconds)
-    review_threshold: float = 0.3  # Retention threshold for review
+    forgetting_background_interval: float = FORGETTING_BACKGROUND_INTERVAL_SECONDS  # Run forgetting task every hour (seconds)
+    review_threshold: float = REVIEW_RETENTION_THRESHOLD  # Retention threshold for review
     auto_reinforce_high_value: bool = True  # Auto-reinforce high-importance memories
 
 
@@ -299,7 +314,7 @@ class EpisodicMemoryStore:
         """Stop the background forgetting task."""
         self._forgetting_running = False
         if self._forgetting_thread and self._forgetting_thread.is_alive():
-            self._forgetting_thread.join(timeout=5.0)
+            self._forgetting_thread.join(timeout=FORGETTING_THREAD_TIMEOUT_SECONDS)
 
     def _forgetting_loop(self):
         """Background loop for forgetting processing."""
@@ -402,7 +417,7 @@ class EpisodicMemoryStore:
             return False
 
         # High importance threshold
-        if episode.importance > 0.6:
+        if episode.importance > HIGH_IMPORTANCE_THRESHOLD:
             return True
 
         # Linked to many entities (social/contextual importance)
@@ -623,7 +638,7 @@ class EpisodicMemoryStore:
         if self.ebbinghaus and episode.episode_id:
             ts = episode.timestamp.timestamp()
             # Initial retention based on importance
-            initial_retention = 0.5 + (0.5 * episode.importance)
+            initial_retention = INITIAL_RETENTION_BASE + (INITIAL_RETENTION_IMPORTANCE_FACTOR * episode.importance)
             self.ebbinghaus.register_memory(
                 memory_id=episode.episode_id,
                 initial_retention=initial_retention,
@@ -657,8 +672,8 @@ class EpisodicMemoryStore:
             The sigmoid computation uses clipping to ensure numerical stability.
         """
         # Clip the exponent to prevent overflow in exp()
-        # For surprise=0, exponent=2.0, for surprise=100, exponent=-98 (safe)
-        exponent = np.clip(-surprise + 2.0, -500, 500)
+        # For surprise=0, exponent=IMPORTANCE_SIGMOID_OFFSET, for surprise=100, exponent=-98 (safe)
+        exponent = np.clip(-surprise + IMPORTANCE_SIGMOID_OFFSET, EXP_CLIP_MIN, EXP_CLIP_MAX)
         importance = 1.0 / (1.0 + np.exp(exponent))
         return float(np.clip(importance, 0.0, 1.0))
     

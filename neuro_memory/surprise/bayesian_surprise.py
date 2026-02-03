@@ -24,16 +24,30 @@ import torch
 import torch.nn as nn
 from scipy.stats import entropy
 
+# Import constants from config
+from config.constants import (
+    SURPRISE_WINDOW_SIZE,
+    SURPRISE_ENCODING_THRESHOLD,
+    MIN_SURPRISE_OBSERVATIONS,
+    SURPRISE_SMOOTHING_ALPHA,
+    BAYESIAN_SURPRISE_PERCENTILE,
+    DEFAULT_OBSERVATION_VARIANCE,
+    DEFAULT_LSTM_HIDDEN_DIM,
+    DEFAULT_LSTM_NUM_LAYERS,
+    LSTM_DROPOUT_RATE,
+    EPSILON,
+)
+
 
 @dataclass
 class SurpriseConfig:
     """Configuration for Bayesian surprise calculation."""
-    window_size: int = 50  # Number of recent observations for prior estimation
-    surprise_threshold: float = 0.7  # Threshold for triggering memory encoding
+    window_size: int = SURPRISE_WINDOW_SIZE  # Number of recent observations for prior estimation
+    surprise_threshold: float = SURPRISE_ENCODING_THRESHOLD  # Threshold for triggering memory encoding
     kl_method: str = "symmetric"  # "forward", "reverse", or "symmetric" (JS divergence)
     use_adaptive_threshold: bool = True  # Adapt threshold based on surprise distribution
-    min_observations: int = 10  # Minimum observations before calculating surprise
-    smoothing_alpha: float = 0.1  # Exponential moving average smoothing
+    min_observations: int = MIN_SURPRISE_OBSERVATIONS  # Minimum observations before calculating surprise
+    smoothing_alpha: float = SURPRISE_SMOOTHING_ALPHA  # Exponential moving average smoothing
     
 
 class PredictiveModel(nn.Module):
@@ -41,18 +55,18 @@ class PredictiveModel(nn.Module):
     Neural predictive model for estimating next-state distributions.
     Uses a simple LSTM to predict future states given current context.
     """
-    
-    def __init__(self, input_dim: int, hidden_dim: int = 256, num_layers: int = 2):
+
+    def __init__(self, input_dim: int, hidden_dim: int = DEFAULT_LSTM_HIDDEN_DIM, num_layers: int = DEFAULT_LSTM_NUM_LAYERS):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        
+
         self.lstm = nn.LSTM(
             input_size=input_dim,
             hidden_size=hidden_dim,
             num_layers=num_layers,
             batch_first=True,
-            dropout=0.1 if num_layers > 1 else 0.0
+            dropout=LSTM_DROPOUT_RATE if num_layers > 1 else 0.0
         )
         
         # Output layer predicts distribution parameters (mean, log_var)
@@ -186,7 +200,7 @@ class BayesianSurpriseEngine:
             
             kl = 0.5 * (kl_prior + kl_posterior)
         
-        return max(0.0, kl)  # Ensure non-negative
+        return float(max(0.0, kl))  # Ensure non-negative
     
     def update_prior(self, observation: np.ndarray):
         """
@@ -239,7 +253,7 @@ class BayesianSurpriseEngine:
             posterior_var: Updated variance [input_dim]
         """
         # Assume observation noise (likelihood variance)
-        obs_var = 0.1 * np.ones_like(observation)
+        obs_var = DEFAULT_OBSERVATION_VARIANCE * np.ones_like(observation)
         
         # Bayesian update for Gaussian-Gaussian conjugate prior
         # Posterior precision = Prior precision + Observation precision
@@ -297,14 +311,14 @@ class BayesianSurpriseEngine:
         if len(self.surprise_history) > 10:
             surprise_array = np.array(self.surprise_history)
             self.std_surprise = np.std(surprise_array)
-            normalized_surprise = (surprise - self.mean_surprise) / (self.std_surprise + 1e-8)
+            normalized_surprise = (surprise - self.mean_surprise) / (self.std_surprise + EPSILON)
         else:
             normalized_surprise = 0.0
         
         # Adaptive threshold
         if self.config.use_adaptive_threshold and len(self.surprise_history) > 20:
-            # Set threshold at 75th percentile of recent surprise values
-            threshold = np.percentile(self.surprise_history, 75)
+            # Set threshold at configured percentile of recent surprise values
+            threshold = np.percentile(self.surprise_history, BAYESIAN_SURPRISE_PERCENTILE)
         else:
             threshold = self.config.surprise_threshold
         

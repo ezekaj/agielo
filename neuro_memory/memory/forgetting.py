@@ -18,13 +18,26 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
+# Import constants from config
+from config.constants import (
+    DEFAULT_DECAY_RATE,
+    REHEARSAL_BOOST_MULTIPLIER,
+    MIN_ACTIVATION_THRESHOLD,
+    BASE_STABILITY_HOURS,
+    STABILITY_MULTIPLIER,
+    MIN_STABILITY_HOURS,
+    MAX_STABILITY_HOURS,
+    FORGET_RETENTION_THRESHOLD,
+    IMMEDIATE_REVIEW_DELAY_HOURS,
+)
+
 
 @dataclass
 class ForgettingConfig:
     """Configuration for memory forgetting."""
-    decay_rate: float = 0.5  # How fast memories decay
-    rehearsal_boost: float = 1.5  # Strength multiplier on rehearsal
-    min_activation: float = 0.1  # Minimum activation threshold
+    decay_rate: float = DEFAULT_DECAY_RATE  # How fast memories decay
+    rehearsal_boost: float = REHEARSAL_BOOST_MULTIPLIER  # Strength multiplier on rehearsal
+    min_activation: float = MIN_ACTIVATION_THRESHOLD  # Minimum activation threshold
     use_power_law: bool = True  # Use power law vs exponential decay
 
 
@@ -201,11 +214,11 @@ class MemoryState:
 @dataclass
 class EbbinghausConfig:
     """Configuration for Ebbinghaus forgetting model."""
-    base_stability: float = 1.0  # Initial stability (in hours)
-    stability_multiplier: float = 1.5  # How much stability increases on successful retrieval
-    forget_threshold: float = 0.3  # Retention threshold below which memory may be forgotten
-    min_stability: float = 0.5  # Minimum stability score
-    max_stability: float = 720.0  # Maximum stability (30 days in hours)
+    base_stability: float = BASE_STABILITY_HOURS  # Initial stability (in hours)
+    stability_multiplier: float = STABILITY_MULTIPLIER  # How much stability increases on successful retrieval
+    forget_threshold: float = FORGET_RETENTION_THRESHOLD  # Retention threshold below which memory may be forgotten
+    min_stability: float = MIN_STABILITY_HOURS  # Minimum stability score
+    max_stability: float = MAX_STABILITY_HOURS  # Maximum stability (30 days in hours)
 
 
 class EbbinghausForgetting:
@@ -544,7 +557,7 @@ class SpacedRepetitionConfig:
         720.0,   # 30 days
         2160.0   # 90 days
     ])
-    immediate_review_delay: float = 0.25  # 15 minutes for immediate review
+    immediate_review_delay: float = IMMEDIATE_REVIEW_DELAY_HOURS  # 15 minutes for immediate review
     stability_weight: float = 1.0  # How much stability influences review interval
 
 

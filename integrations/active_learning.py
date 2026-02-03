@@ -27,6 +27,24 @@ from dataclasses import dataclass, field
 from pathlib import Path
 import threading
 
+# Import constants from config
+from config.constants import (
+    EXPOSURE_DECAY_RATE,
+    UNCERTAINTY_PRIORITY_WEIGHT,
+    CURIOSITY_PRIORITY_WEIGHT,
+    NOVELTY_PRIORITY_WEIGHT,
+    DEFAULT_TOPIC_CONFIDENCE,
+    DEFAULT_TOPIC_CURIOSITY,
+    RND_CURIOSITY_WEIGHT,
+    RND_HIGH_CURIOSITY_THRESHOLD,
+    LOW_CURIOSITY_THRESHOLD,
+    KNOWN_TOPIC_PRIORITY_FACTOR,
+    DEFAULT_CURIOSITY_BOOST,
+    HIGH_CONFIDENCE_THRESHOLD,
+    CURIOSITY_DECAY_WEIGHT,
+    CURIOSITY_UPDATE_WEIGHT,
+)
+
 # Try to import RND curiosity module
 try:
     from integrations.rnd_curiosity import RNDCuriosity, DEFAULT_EMBEDDING_DIM
@@ -47,8 +65,8 @@ except ImportError:
 class Topic:
     """A topic the AI knows about or is curious about."""
     name: str
-    confidence: float = 0.5      # How well we know it (0=unknown, 1=expert)
-    curiosity: float = 0.5       # How interested we are (0=boring, 1=fascinating)
+    confidence: float = DEFAULT_TOPIC_CONFIDENCE  # How well we know it (0=unknown, 1=expert)
+    curiosity: float = DEFAULT_TOPIC_CURIOSITY    # How interested we are (0=boring, 1=fascinating)
     exposure_count: int = 0      # How many times we've seen it
     success_count: int = 0       # How many times we answered correctly
     last_seen: float = 0.0       # Timestamp
@@ -68,11 +86,11 @@ class Topic:
 
         # Sweet spot: moderate confidence, high curiosity
         uncertainty = 1.0 - self.confidence
-        novelty_bonus = 1.0 / (1.0 + self.exposure_count * 0.1)
+        novelty_bonus = 1.0 / (1.0 + self.exposure_count * EXPOSURE_DECAY_RATE)
 
-        priority = (uncertainty * 0.4 +          # Want to learn unknowns
-                   self.curiosity * 0.4 +         # Want to learn interesting things
-                   novelty_bonus * 0.2)           # Slight preference for new topics
+        priority = (uncertainty * UNCERTAINTY_PRIORITY_WEIGHT +  # Want to learn unknowns
+                   self.curiosity * CURIOSITY_PRIORITY_WEIGHT +   # Want to learn interesting things
+                   novelty_bonus * NOVELTY_PRIORITY_WEIGHT)       # Slight preference for new topics
 
         return min(1.0, priority)
 
@@ -151,7 +169,7 @@ class ActiveLearner:
         # RND curiosity integration
         self.use_rnd = use_rnd and RND_AVAILABLE
         self.rnd_curiosity: Optional[RNDCuriosity] = None
-        self._rnd_weight = 0.5  # Weight for RND curiosity in combined score
+        self._rnd_weight = RND_CURIOSITY_WEIGHT  # Weight for RND curiosity in combined score
 
         # RND tracking statistics
         self._rnd_stats = {
@@ -229,9 +247,9 @@ class ActiveLearner:
                 return False, 0.2, "low_curiosity"
 
             # Perfect zone: uncertain but curious (either traditional or RND)
-            if t.confidence < 0.7 and (t.curiosity > 0.5 or rnd_curiosity > 0.6):
+            if t.confidence < 0.7 and (t.curiosity > LOW_CURIOSITY_THRESHOLD or rnd_curiosity > RND_HIGH_CURIOSITY_THRESHOLD):
                 reason = "curious_uncertain"
-                if rnd_curiosity > 0.6 and t.curiosity <= 0.5:
+                if rnd_curiosity > RND_HIGH_CURIOSITY_THRESHOLD and t.curiosity <= LOW_CURIOSITY_THRESHOLD:
                     reason = "rnd_curious_uncertain"
                 return True, combined_priority, reason
 
@@ -358,8 +376,8 @@ class ActiveLearner:
 
             # Complexity affects curiosity
             # Sweet spot is moderate complexity
-            complexity_interest = 1.0 - abs(complexity - 0.5) * 2
-            t.curiosity = 0.9 * t.curiosity + 0.1 * complexity_interest
+            complexity_interest = 1.0 - abs(complexity - LOW_CURIOSITY_THRESHOLD) * 2
+            t.curiosity = CURIOSITY_DECAY_WEIGHT * t.curiosity + CURIOSITY_UPDATE_WEIGHT * complexity_interest
 
             # Compute RND curiosity before updating predictor
             rnd_curiosity_score = 0.0
@@ -452,7 +470,7 @@ class ActiveLearner:
 
                 if topic.confidence > 0.9:
                     reason = "refresh_expert"
-                    priority *= 0.3
+                    priority *= KNOWN_TOPIC_PRIORITY_FACTOR
                 elif topic.curiosity > 0.7:
                     reason = "high_curiosity"
                 elif topic.confidence < 0.3:
@@ -503,7 +521,7 @@ class ActiveLearner:
             if topic1 not in self.topics[topic2].related_topics:
                 self.topics[topic2].related_topics.append(topic1)
 
-    def boost_curiosity(self, topic: str, amount: float = 0.2):
+    def boost_curiosity(self, topic: str, amount: float = DEFAULT_CURIOSITY_BOOST):
         """Manually boost curiosity for a topic (e.g., user showed interest)."""
         with self._lock:
             if topic not in self.topics:
@@ -833,7 +851,7 @@ class CurriculumLearner:
                 continue
 
             t = self.learner.topics[topic]
-            if t.confidence >= 0.8:  # Already know it
+            if t.confidence >= HIGH_CONFIDENCE_THRESHOLD:  # Already know it
                 continue
 
             # Score based on difficulty appropriateness
