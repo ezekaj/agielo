@@ -6,11 +6,13 @@ Implements intrinsic motivation for learning:
 - Learn what you DON'T know (low confidence)
 - Learn what you're CURIOUS about (high interest)
 - Prioritize topics at the edge of knowledge
+- Explore novel areas using RND (Random Network Distillation)
 
 Based on:
 - Intrinsic Motivation (Oudeyer & Kaplan, 2007)
 - Curiosity-driven Learning (Pathak et al., 2017)
 - Optimal Learning Theory (MacKay, 1992)
+- Random Network Distillation (Burda et al., 2018)
 """
 
 import numpy as np
@@ -21,6 +23,21 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
 import threading
+
+# Try to import RND curiosity module
+try:
+    from integrations.rnd_curiosity import RNDCuriosity, DEFAULT_EMBEDDING_DIM
+    RND_AVAILABLE = True
+except ImportError:
+    RND_AVAILABLE = False
+    DEFAULT_EMBEDDING_DIM = 384
+
+# Try to import semantic embeddings for topic-to-embedding conversion
+try:
+    from integrations.semantic_embeddings import get_embedder
+    EMBEDDER_AVAILABLE = True
+except ImportError:
+    EMBEDDER_AVAILABLE = False
 
 
 @dataclass
@@ -73,6 +90,8 @@ class LearningEvent:
     confidence_before: float
     confidence_after: float
     curiosity_delta: float = 0.0
+    rnd_curiosity: float = 0.0  # RND curiosity score at time of event
+    is_novel: bool = False  # Whether this was a novel topic discovery
 
 
 class ActiveLearner:
@@ -84,9 +103,10 @@ class ActiveLearner:
     2. Follow curiosity (intrinsic motivation)
     3. Reduce uncertainty where it matters
     4. Build on existing knowledge (scaffolding)
+    5. Explore novel areas using RND curiosity
     """
 
-    def __init__(self, storage_path: str = None):
+    def __init__(self, storage_path: str = None, use_rnd: bool = True):
         self.storage_path = Path(storage_path or os.path.expanduser("~/.cognitive_ai_knowledge/active_learning"))
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -104,6 +124,32 @@ class ActiveLearner:
             'relevance': 0.2,      # Related to known topics
         }
 
+        # RND curiosity integration
+        self.use_rnd = use_rnd and RND_AVAILABLE
+        self.rnd_curiosity: Optional[RNDCuriosity] = None
+        self._rnd_weight = 0.5  # Weight for RND curiosity in combined score
+
+        # RND tracking statistics
+        self._rnd_stats = {
+            'curiosity_history': [],  # List of (timestamp, avg_curiosity) tuples
+            'novel_discoveries': 0,    # Count of novel topic discoveries
+            'total_rnd_updates': 0,    # Total predictor updates
+            'curiosity_decay_rate': 0.0,  # Measured decay over time
+        }
+
+        if self.use_rnd:
+            try:
+                rnd_storage = self.storage_path / 'rnd_curiosity'
+                self.rnd_curiosity = RNDCuriosity(
+                    input_dim=DEFAULT_EMBEDDING_DIM,
+                    storage_path=str(rnd_storage)
+                )
+                print(f"[ActiveLearner] RND curiosity enabled (dim={DEFAULT_EMBEDDING_DIM})")
+            except Exception as e:
+                print(f"[ActiveLearner] Failed to initialize RND: {e}")
+                self.use_rnd = False
+                self.rnd_curiosity = None
+
         # Load saved state
         self._load_state()
 
@@ -114,6 +160,9 @@ class ActiveLearner:
         """
         Decide if we should learn about this topic.
 
+        Combines traditional curiosity (confidence-based) with RND curiosity
+        (novelty-based) for a comprehensive learning decision.
+
         Returns:
             (should_learn, priority, reason)
         """
@@ -121,33 +170,127 @@ class ActiveLearner:
             # Get or create topic
             if topic not in self.topics:
                 self.topics[topic] = Topic(name=topic)
+                # New topic - check RND curiosity for extra signal
+                rnd_curiosity = self._compute_rnd_curiosity(topic, content)
+                if rnd_curiosity > 0.7:
+                    self._record_novel_discovery()
+                    return True, 0.95, "new_topic_rnd_novel"
                 return True, 0.9, "new_topic"
 
             t = self.topics[topic]
-            priority = t.learning_priority
+            base_priority = t.learning_priority
 
-            # Already expert? Low priority
+            # Compute RND curiosity for this topic
+            rnd_curiosity = self._compute_rnd_curiosity(topic, content)
+
+            # Combine existing priority with RND curiosity
+            # final_score = 0.5 * existing + 0.5 * rnd
+            combined_priority = (1.0 - self._rnd_weight) * base_priority + self._rnd_weight * rnd_curiosity
+
+            # Already expert? Low priority unless RND says it's novel
             if t.confidence > 0.9:
+                if rnd_curiosity > 0.8:
+                    # Expert but RND sees novelty - might be new aspect
+                    return True, combined_priority, "expert_but_rnd_novel"
                 return False, 0.1, "already_expert"
 
-            # Low curiosity? Skip unless very uncertain
+            # Low traditional curiosity? Check RND curiosity as override
             if t.curiosity < 0.3 and t.confidence > 0.5:
+                if rnd_curiosity > 0.7:
+                    # Low traditional curiosity but RND sees novelty
+                    return True, combined_priority, "rnd_override_low_curiosity"
                 return False, 0.2, "low_curiosity"
 
-            # Perfect zone: uncertain but curious
-            if t.confidence < 0.7 and t.curiosity > 0.5:
-                return True, priority, "curious_uncertain"
+            # Perfect zone: uncertain but curious (either traditional or RND)
+            if t.confidence < 0.7 and (t.curiosity > 0.5 or rnd_curiosity > 0.6):
+                reason = "curious_uncertain"
+                if rnd_curiosity > 0.6 and t.curiosity <= 0.5:
+                    reason = "rnd_curious_uncertain"
+                return True, combined_priority, reason
 
-            # Recently seen? Lower priority
+            # Recently seen? Lower priority but RND can override
             time_since = datetime.now().timestamp() - t.last_seen
             if time_since < 300:  # 5 minutes
-                return False, priority * 0.5, "recently_seen"
+                if rnd_curiosity > 0.8:
+                    # RND still sees novelty despite recent exposure
+                    return True, combined_priority * 0.7, "recently_seen_rnd_override"
+                return False, combined_priority * 0.5, "recently_seen"
 
             # Default: learn if priority is high enough
-            return priority > 0.4, priority, "priority_based"
+            return combined_priority > 0.4, combined_priority, "priority_based"
+
+    def _compute_rnd_curiosity(self, topic: str, content: str = "") -> float:
+        """
+        Compute RND curiosity for a topic.
+
+        Args:
+            topic: Topic name
+            content: Optional content to enrich embedding
+
+        Returns:
+            RND curiosity score (0-1), or 0.5 if RND unavailable
+        """
+        if not self.use_rnd or self.rnd_curiosity is None:
+            return 0.5  # Neutral score when RND unavailable
+
+        try:
+            # Get embedding for topic
+            embedding = self._get_topic_embedding(topic, content)
+            if embedding is None:
+                return 0.5
+
+            # Compute RND curiosity
+            return self.rnd_curiosity.compute_curiosity(embedding)
+        except Exception as e:
+            # Fail silently, return neutral score
+            return 0.5
+
+    def _get_topic_embedding(self, topic: str, content: str = "") -> Optional[np.ndarray]:
+        """
+        Get embedding vector for a topic.
+
+        Args:
+            topic: Topic name
+            content: Optional content to enrich embedding
+
+        Returns:
+            Embedding array or None if unavailable
+        """
+        # Combine topic and content for richer embedding
+        text = topic
+        if content:
+            text = f"{topic}: {content[:200]}"  # Limit content length
+
+        # Try semantic embedder first
+        if EMBEDDER_AVAILABLE:
+            try:
+                embedder = get_embedder()
+                return embedder.embed(text)
+            except Exception:
+                pass
+
+        # Fallback: simple hash-based embedding
+        import hashlib
+        embedding = np.zeros(DEFAULT_EMBEDDING_DIM, dtype=np.float32)
+        text_hash = hashlib.sha256(text.encode()).digest()
+        for i, byte in enumerate(text_hash):
+            pos = i % DEFAULT_EMBEDDING_DIM
+            embedding[pos] = byte / 255.0 - 0.5
+
+        # Normalize
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding /= norm
+
+        return embedding
+
+    def _record_novel_discovery(self):
+        """Record a novel topic discovery for statistics."""
+        self._rnd_stats['novel_discoveries'] += 1
 
     def record_exposure(self, topic: str, was_successful: bool,
-                       surprise_level: float = 0.5, complexity: float = 0.5):
+                       surprise_level: float = 0.5, complexity: float = 0.5,
+                       content: str = ""):
         """
         Record that we encountered/learned about a topic.
 
@@ -156,9 +299,11 @@ class ActiveLearner:
             was_successful: Did we answer correctly / learn successfully?
             surprise_level: How surprising was the outcome (0-1)
             complexity: How complex was the content (0-1)
+            content: Optional content for RND embedding
         """
         with self._lock:
-            if topic not in self.topics:
+            is_novel = topic not in self.topics
+            if is_novel:
                 self.topics[topic] = Topic(name=topic)
 
             t = self.topics[topic]
@@ -189,6 +334,15 @@ class ActiveLearner:
             complexity_interest = 1.0 - abs(complexity - 0.5) * 2
             t.curiosity = 0.9 * t.curiosity + 0.1 * complexity_interest
 
+            # Compute RND curiosity before updating predictor
+            rnd_curiosity_score = 0.0
+            if self.use_rnd and self.rnd_curiosity is not None:
+                rnd_curiosity_score = self._compute_rnd_curiosity_unlocked(topic, content)
+
+            # Update RND predictor after successful learning
+            if was_successful and self.use_rnd and self.rnd_curiosity is not None:
+                self._update_rnd_predictor_unlocked(topic, content)
+
             # Record event
             event = LearningEvent(
                 topic=topic,
@@ -196,9 +350,18 @@ class ActiveLearner:
                 was_correct=was_successful,
                 confidence_before=old_confidence,
                 confidence_after=t.confidence,
-                curiosity_delta=t.curiosity - 0.5
+                curiosity_delta=t.curiosity - 0.5,
+                rnd_curiosity=rnd_curiosity_score,
+                is_novel=is_novel
             )
             self.history.append(event)
+
+            # Track novel discoveries
+            if is_novel and rnd_curiosity_score > 0.7:
+                self._rnd_stats['novel_discoveries'] += 1
+
+            # Update curiosity decay tracking
+            self._update_curiosity_decay_stats()
 
             # Keep history bounded
             if len(self.history) > 1000:
@@ -207,6 +370,58 @@ class ActiveLearner:
             # Auto-save periodically
             if len(self.history) % 50 == 0:
                 self._save_state()
+
+    def _compute_rnd_curiosity_unlocked(self, topic: str, content: str = "") -> float:
+        """Compute RND curiosity without acquiring lock (for internal use)."""
+        if not self.use_rnd or self.rnd_curiosity is None:
+            return 0.5
+
+        try:
+            embedding = self._get_topic_embedding(topic, content)
+            if embedding is None:
+                return 0.5
+            return self.rnd_curiosity.compute_curiosity(embedding)
+        except Exception:
+            return 0.5
+
+    def _update_rnd_predictor_unlocked(self, topic: str, content: str = ""):
+        """Update RND predictor after successful learning (without lock)."""
+        if not self.use_rnd or self.rnd_curiosity is None:
+            return
+
+        try:
+            embedding = self._get_topic_embedding(topic, content)
+            if embedding is not None:
+                # Update predictor to reduce curiosity for this area
+                self.rnd_curiosity.update_predictor(embedding, n_steps=3)
+                self._rnd_stats['total_rnd_updates'] += 1
+        except Exception:
+            pass
+
+    def _update_curiosity_decay_stats(self):
+        """Update curiosity decay tracking statistics."""
+        # Only update periodically to avoid overhead
+        if len(self.history) % 10 != 0:
+            return
+
+        # Compute average RND curiosity over recent history
+        recent_events = [e for e in self.history[-50:] if e.rnd_curiosity > 0]
+        if recent_events:
+            avg_curiosity = np.mean([e.rnd_curiosity for e in recent_events])
+            timestamp = datetime.now().timestamp()
+            self._rnd_stats['curiosity_history'].append((timestamp, avg_curiosity))
+
+            # Keep bounded
+            if len(self._rnd_stats['curiosity_history']) > 100:
+                self._rnd_stats['curiosity_history'] = self._rnd_stats['curiosity_history'][-50:]
+
+            # Compute decay rate if enough data
+            if len(self._rnd_stats['curiosity_history']) >= 10:
+                recent = self._rnd_stats['curiosity_history'][-10:]
+                if recent[-1][0] != recent[0][0]:  # Avoid division by zero
+                    time_delta = recent[-1][0] - recent[0][0]
+                    curiosity_delta = recent[-1][1] - recent[0][1]
+                    self._rnd_stats['curiosity_decay_rate'] = curiosity_delta / time_delta
 
     def get_learning_recommendations(self, k: int = 5) -> List[Tuple[str, float, str]]:
         """
@@ -282,7 +497,7 @@ class ActiveLearner:
             self.topics[topic].curiosity = min(1.0, self.topics[topic].curiosity + amount)
 
     def get_stats(self) -> Dict:
-        """Get learning statistics."""
+        """Get learning statistics including RND curiosity metrics."""
         with self._lock:
             if not self.topics:
                 return {'total_topics': 0, 'avg_confidence': 0, 'avg_curiosity': 0}
@@ -293,15 +508,74 @@ class ActiveLearner:
             recent_events = [e for e in self.history[-100:]]
             recent_accuracy = sum(1 for e in recent_events if e.was_correct) / max(1, len(recent_events))
 
-            return {
+            stats = {
                 'total_topics': len(self.topics),
-                'avg_confidence': np.mean(confidences),
-                'avg_curiosity': np.mean(curiosities),
-                'recent_accuracy': recent_accuracy,
+                'avg_confidence': float(np.mean(confidences)),
+                'avg_curiosity': float(np.mean(curiosities)),
+                'recent_accuracy': float(recent_accuracy),
                 'total_learning_events': len(self.history),
                 'high_curiosity_topics': sum(1 for t in self.topics.values() if t.curiosity > 0.7),
                 'low_confidence_topics': sum(1 for t in self.topics.values() if t.confidence < 0.3),
             }
+
+            # Add RND stats if available
+            if self.use_rnd:
+                stats.update(self.get_rnd_stats_unlocked())
+
+            return stats
+
+    def get_rnd_stats(self) -> Dict:
+        """Get RND curiosity-specific statistics."""
+        with self._lock:
+            return self.get_rnd_stats_unlocked()
+
+    def get_rnd_stats_unlocked(self) -> Dict:
+        """Get RND curiosity stats without lock (for internal use)."""
+        if not self.use_rnd or self.rnd_curiosity is None:
+            return {
+                'rnd_enabled': False,
+                'rnd_available': RND_AVAILABLE,
+            }
+
+        # Get recent RND curiosity values from history
+        recent_rnd = [e.rnd_curiosity for e in self.history[-50:] if e.rnd_curiosity > 0]
+        avg_rnd_curiosity = float(np.mean(recent_rnd)) if recent_rnd else 0.5
+
+        # Count novel discoveries
+        novel_count = sum(1 for e in self.history if e.is_novel and e.rnd_curiosity > 0.7)
+
+        # Compute novelty discovery rate (per 100 events)
+        if len(self.history) > 0:
+            novel_rate = (self._rnd_stats['novel_discoveries'] / len(self.history)) * 100
+        else:
+            novel_rate = 0.0
+
+        # Get exploration stats from RND module
+        rnd_exploration_stats = {}
+        try:
+            rnd_exploration_stats = self.rnd_curiosity.get_exploration_stats()
+        except Exception:
+            pass
+
+        return {
+            'rnd_enabled': True,
+            'rnd_weight': self._rnd_weight,
+            'avg_rnd_curiosity': avg_rnd_curiosity,
+            'novel_discoveries': self._rnd_stats['novel_discoveries'],
+            'novelty_rate_per_100': float(novel_rate),
+            'total_rnd_updates': self._rnd_stats['total_rnd_updates'],
+            'curiosity_decay_rate': float(self._rnd_stats['curiosity_decay_rate']),
+            'rnd_exploration': rnd_exploration_stats,
+        }
+
+    def set_rnd_weight(self, weight: float):
+        """
+        Set the weight for RND curiosity in combined scoring.
+
+        Args:
+            weight: Weight between 0 and 1 (default 0.5)
+        """
+        self._rnd_weight = max(0.0, min(1.0, weight))
 
     def _save_state(self):
         """Save state to disk."""
@@ -326,9 +600,18 @@ class ActiveLearner:
                         'was_correct': e.was_correct,
                         'confidence_before': e.confidence_before,
                         'confidence_after': e.confidence_after,
+                        'rnd_curiosity': e.rnd_curiosity,
+                        'is_novel': e.is_novel,
                     }
                     for e in self.history[-200:]  # Keep last 200
-                ]
+                ],
+                'rnd_stats': {
+                    'curiosity_history': self._rnd_stats['curiosity_history'][-50:],
+                    'novel_discoveries': self._rnd_stats['novel_discoveries'],
+                    'total_rnd_updates': self._rnd_stats['total_rnd_updates'],
+                    'curiosity_decay_rate': self._rnd_stats['curiosity_decay_rate'],
+                },
+                'rnd_weight': self._rnd_weight,
             }
 
             with open(self.storage_path / 'state.json', 'w') as f:
@@ -366,7 +649,20 @@ class ActiveLearner:
                     was_correct=data['was_correct'],
                     confidence_before=data['confidence_before'],
                     confidence_after=data['confidence_after'],
+                    rnd_curiosity=data.get('rnd_curiosity', 0.0),
+                    is_novel=data.get('is_novel', False),
                 ))
+
+            # Load RND stats
+            rnd_stats = state.get('rnd_stats', {})
+            if rnd_stats:
+                self._rnd_stats['curiosity_history'] = rnd_stats.get('curiosity_history', [])
+                self._rnd_stats['novel_discoveries'] = rnd_stats.get('novel_discoveries', 0)
+                self._rnd_stats['total_rnd_updates'] = rnd_stats.get('total_rnd_updates', 0)
+                self._rnd_stats['curiosity_decay_rate'] = rnd_stats.get('curiosity_decay_rate', 0.0)
+
+            # Load RND weight
+            self._rnd_weight = state.get('rnd_weight', 0.5)
 
         except Exception as e:
             print(f"[ActiveLearner] Load error: {e}")

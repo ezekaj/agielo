@@ -160,12 +160,13 @@ Random Network Distillation for smarter exploration of what to learn.
   - Use numpy for networks (simple 2-layer MLP, 128 hidden units)
   - **Completed 2026-02-03**: Created `integrations/rnd_curiosity.py` with full `RNDCuriosity` class implementing Random Network Distillation. Includes `SimpleMLPNetwork` class (2-layer MLP with Xavier init, forward/backward passes), target network (fixed seed=42 for reproducibility), predictor network (trained via SGD), `compute_curiosity()` with running mean/var normalization and sigmoid scaling, `update_predictor()` with configurable gradient steps, `record_curiosity()` for combined measurement and learning, `get_curiosity_map()` for topic-based curiosity using SemanticEmbedder, `get_exploration_stats()` for comprehensive statistics. State persistence via JSON. All 28 tests pass in `tests/test_rnd_curiosity.py`.
 
-- [ ] Integrate RND into active learning in `integrations/active_learning.py`:
+- [x] Integrate RND into active learning in `integrations/active_learning.py`:
   - Import `RNDCuriosity` from `rnd_curiosity.py`
   - Add RND curiosity as additional signal to `should_learn()` decision
   - Combine with existing curiosity: `final_score = 0.5 * existing + 0.5 * rnd`
   - Update predictor after each successful learning
   - Track: curiosity decay over time, novel topic discovery rate
+  - **Completed 2026-02-03**: Fully integrated RNDCuriosity into ActiveLearner. Added `use_rnd` parameter to `__init__()`, implemented `_compute_rnd_curiosity()` and `_get_topic_embedding()` helpers, updated `should_learn()` to combine traditional curiosity with RND curiosity (configurable weight via `set_rnd_weight()`), added RND predictor updates in `record_exposure()` on successful learning, implemented comprehensive tracking via `_rnd_stats` dict (curiosity_history, novel_discoveries, total_rnd_updates, curiosity_decay_rate), added `get_rnd_stats()` method, updated persistence to save/load all RND state. Created 25 new tests in `tests/test_active_learning_rnd.py`. All 28 RND tests + 25 new integration tests pass.
 
 - [ ] Add curiosity visualization in `integrations/rnd_curiosity.py`:
   - `get_curiosity_map(topics: List[str]) -> Dict[str, float]`: curiosity per topic
