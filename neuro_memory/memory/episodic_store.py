@@ -298,6 +298,12 @@ class EpisodicMemoryStore:
         1. Identifies memories below retention threshold
         2. Auto-reinforces high-value memories
         3. Removes truly forgotten memories from active storage
+
+        Thread Safety:
+            - Safe to call from any thread
+            - Idempotent: calling multiple times has no additional effect
+            - The background thread uses `_episodes_lock` internally when modifying episodes
+            - Only one background thread runs at a time (guarded by `_forgetting_running` flag)
         """
         if self._forgetting_running:
             return  # Already running
@@ -311,13 +317,66 @@ class EpisodicMemoryStore:
         self._forgetting_thread.start()
 
     def stop_forgetting_background_task(self) -> None:
-        """Stop the background forgetting task."""
+        """
+        Stop the background forgetting task.
+
+        Thread Safety:
+            - Safe to call from any thread
+            - Blocks until the background thread terminates (with timeout)
+            - Uses `_forgetting_running` flag to signal thread to stop
+            - Timeout prevents indefinite blocking if thread is stuck
+        """
         self._forgetting_running = False
         if self._forgetting_thread and self._forgetting_thread.is_alive():
             self._forgetting_thread.join(timeout=FORGETTING_THREAD_TIMEOUT_SECONDS)
 
     def _forgetting_loop(self) -> None:
-        """Background loop for forgetting processing."""
+        """
+        Background loop for Ebbinghaus forgetting processing.
+
+        This method runs in a dedicated daemon thread, periodically checking
+        all memories for retention decay and processing forgetting/reinforcement.
+
+        Timing Behavior:
+            - Runs every `config.forgetting_background_interval` seconds (default: 3600s = 1 hour)
+            - Sleeps between iterations regardless of processing time
+            - First iteration runs immediately when thread starts
+            - Thread continues until `stop_forgetting_background_task()` is called
+
+        Thread Safety Contract:
+            - This method is designed to run in a single background thread only
+            - Uses `self._episodes_lock` (RLock) to protect all episode list access
+            - Lock acquisition order: always acquire _episodes_lock before modifying episodes
+            - The lock is held during the entire episode scan and removal operation
+              to ensure atomic modification of the episodes list
+            - Heavy I/O operations (disk offload, garbage collection) are performed
+              OUTSIDE the lock to minimize lock contention with other threads
+
+        Lock Usage Pattern:
+            1. Acquire _episodes_lock
+            2. Scan episodes to identify at-risk memories (read operation)
+            3. Categorize into episodes_to_forget and episodes_to_reinforce
+            4. Remove forgotten episodes from list (write operation)
+            5. Release _episodes_lock
+            6. Process reinforcements (no lock needed - no list modification)
+            7. Offload forgotten episodes to disk (no lock needed - I/O)
+            8. Clean up vector DB and trigger garbage collection
+
+        Error Handling:
+            - Exceptions in processing are caught and logged, not propagated
+            - Processing errors do not stop the background thread
+            - Each iteration is independent; failures don't affect subsequent iterations
+
+        Graceful Shutdown:
+            - Set `self._forgetting_running = False` to signal thread to stop
+            - Thread will complete current sleep interval before checking flag
+            - Use `stop_forgetting_background_task()` which also joins the thread
+
+        See Also:
+            - `_process_forgetting()`: The actual processing logic
+            - `start_forgetting_background_task()`: Starts this thread
+            - `stop_forgetting_background_task()`: Stops this thread gracefully
+        """
         while self._forgetting_running:
             try:
                 self._process_forgetting()
@@ -438,6 +497,12 @@ class EpisodicMemoryStore:
         Args:
             episode_id: ID of the retrieved episode
             success: Whether the retrieval was successful
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Episode lookup via `_get_episode_by_id()` uses `_episodes_lock`
+            - Metadata updates on the episode object are atomic (dict assignment)
+            - Ebbinghaus and spaced repetition updates are independent and thread-safe
         """
         now = datetime.now().timestamp()
 
@@ -471,6 +536,11 @@ class EpisodicMemoryStore:
 
         Returns:
             List of episodes needing review
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Episode lookups via `_get_episode_by_id()` use `_episodes_lock`
+            - Returns a new list (not a reference to internal data)
         """
         if not self.spaced_repetition:
             return []
@@ -492,6 +562,12 @@ class EpisodicMemoryStore:
 
         Returns:
             Dict with forgetting, retention, and review statistics
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Reads counters which may be updated by background thread
+            - Statistics represent a point-in-time snapshot (not atomic across all fields)
+            - Returns a new dict (not a reference to internal data)
         """
         stats = {
             "forgotten_memories": self.forgotten_memories_count,
@@ -601,6 +677,13 @@ class EpisodicMemoryStore:
         Raises:
             ValueError: If content, surprise, or embedding contain NaN/Inf values
             TypeError: If content or embedding is not a numpy array
+
+        Thread Safety:
+            - Safe to call from any thread concurrently with other store/retrieve operations
+            - Uses `_episodes_lock` when appending to the episodes list
+            - May trigger consolidation which also uses `_episodes_lock`
+            - Index updates are protected by the lock
+            - Safe to call while background forgetting task is running
         """
         # Validate input data before creating episode
         self._validate_episode_data(content, surprise, embedding)
@@ -826,6 +909,13 @@ class EpisodicMemoryStore:
 
         Returns:
             List of similar episodes
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - ChromaDB queries are thread-safe
+            - Episode lookups via `_get_episode_by_id()` use `_episodes_lock`
+            - Returns a new list (not a reference to internal data)
+            - Results may include episodes being processed by background forgetting
         """
         # Query vector database
         where_clause = None
@@ -886,6 +976,12 @@ class EpisodicMemoryStore:
 
         Returns:
             Episodes in time range
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Uses `_episodes_lock` during iteration over episodes list
+            - Returns a new list (not a reference to internal data)
+            - Episodes in returned list are references to actual Episode objects
         """
         matching_episodes = []
 
@@ -898,13 +994,41 @@ class EpisodicMemoryStore:
         return matching_episodes
     
     def retrieve_by_location(self, location: str) -> List[Episode]:
-        """Retrieve all episodes at a specific location."""
+        """
+        Retrieve all episodes at a specific location.
+
+        Args:
+            location: Location string to match
+
+        Returns:
+            List of episodes at the specified location
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Index lookup is read-only (no lock needed for dict reads)
+            - Episode lookups via `_get_episode_by_id()` use `_episodes_lock`
+            - Returns a new list (not a reference to internal data)
+        """
         episode_ids = self.spatial_index.get(location, [])
         episodes = [self._get_episode_by_id(eid) for eid in episode_ids]
         return [ep for ep in episodes if ep is not None]
     
     def retrieve_by_entity(self, entity: str) -> List[Episode]:
-        """Retrieve all episodes involving a specific entity."""
+        """
+        Retrieve all episodes involving a specific entity.
+
+        Args:
+            entity: Entity name to match
+
+        Returns:
+            List of episodes involving the specified entity
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Index lookup is read-only (no lock needed for dict reads)
+            - Episode lookups via `_get_episode_by_id()` use `_episodes_lock`
+            - Returns a new list (not a reference to internal data)
+        """
         episode_ids = self.entity_index.get(entity, [])
         episodes = [self._get_episode_by_id(eid) for eid in episode_ids]
         return [ep for ep in episodes if ep is not None]
@@ -999,7 +1123,19 @@ class EpisodicMemoryStore:
         return None
     
     def save_state(self) -> None:
-        """Save memory state to disk (thread-safe)."""
+        """
+        Save memory state to disk.
+
+        Persists all episodes, indices, and statistics to the configured persistence path.
+        Does nothing if no persistence path is configured.
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Uses `_episodes_lock` when reading episodes for serialization
+            - File write is atomic (via single write operation)
+            - May be called while background forgetting task is running
+            - Does not block other read operations while writing to disk
+        """
         if not self.persistence_path:
             return
 
@@ -1026,7 +1162,19 @@ class EpisodicMemoryStore:
             json.dump(state, f, indent=2)
     
     def load_state(self) -> None:
-        """Load memory state from disk."""
+        """
+        Load memory state from disk.
+
+        Restores all episodes, indices, and statistics from the configured persistence path.
+        Does nothing if no persistence path is configured or if state file doesn't exist.
+
+        Thread Safety:
+            - Should be called during initialization or when no other operations are in progress
+            - Uses `_episodes_lock` when restoring episodes list
+            - NOT safe to call while background forgetting task is running
+            - NOT safe to call concurrently with store_episode() or other write operations
+            - Intended for initialization or recovery scenarios only
+        """
         if not self.persistence_path:
             return
         
@@ -1056,7 +1204,28 @@ class EpisodicMemoryStore:
         self.reinforced_memories_count = state.get("reinforced_memories_count", 0)
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get memory statistics including forgetting system stats (thread-safe)."""
+        """
+        Get memory statistics including forgetting system stats.
+
+        Returns comprehensive statistics about the memory store including:
+        - Total episodes stored and in memory
+        - Episodes offloaded to disk
+        - Unique locations and entities
+        - Mean importance score
+        - Forgetting/review/reinforcement counts
+        - Ebbinghaus retention statistics (if enabled)
+        - Spaced repetition statistics (if enabled)
+
+        Returns:
+            Dict with memory statistics
+
+        Thread Safety:
+            - Safe to call from any thread concurrently
+            - Uses `_episodes_lock` when reading episodes for count and importance calculation
+            - Statistics represent a point-in-time snapshot (not atomic across all fields)
+            - Returns a new dict (not a reference to internal data)
+            - Safe to call while background forgetting task is running
+        """
         # Thread-safe read of episodes for statistics
         with self._episodes_lock:
             episodes_count = len(self.episodes)
@@ -1101,6 +1270,14 @@ class EpisodicMemoryStore:
         2. Saves all memory state to disk
         3. Saves Ebbinghaus forgetting system state
         4. Saves spaced repetition scheduler state
+
+        Thread Safety:
+            - Safe to call from any thread, but should typically be called once
+            - Stops background forgetting thread first (blocking with timeout)
+            - Uses `_episodes_lock` when saving state
+            - Idempotent: safe to call multiple times
+            - Called automatically via atexit on program termination
+            - Catches and logs all exceptions to prevent exit failures
         """
         try:
             # Stop the background forgetting thread first

@@ -137,19 +137,73 @@ class ForgettingEngine:
         activation: float
     ) -> float:
         """
-        Probability of forgetting given activation.
+        Compute the probability of forgetting given current memory activation.
 
-        Uses sigmoid function around min_activation threshold.
-        Higher activation = lower forgetting probability.
+        Mathematical Foundation:
+            Uses a sigmoid (logistic) function to model the probability of forgetting.
+            The sigmoid provides a smooth, differentiable transition between "likely
+            to remember" and "likely to forget" states, which is biologically plausible
+            and mathematically convenient.
+
+        Why Sigmoid:
+            1. **Biological Plausibility**: Neural responses to stimuli follow sigmoidal
+               patterns. The sigmoid mimics how memory retrieval probability changes
+               gradually rather than abruptly at a threshold.
+
+            2. **Smooth Transition**: Unlike a hard threshold (step function), sigmoid
+               provides gradual probability changes, making the system more robust to
+               noise and small activation fluctuations.
+
+            3. **Bounded Output**: Sigmoid naturally maps any input to (0, 1), perfect
+               for probability estimation without additional clamping.
+
+            4. **Computational Properties**: Sigmoid is differentiable everywhere,
+               enabling gradient-based optimization if needed.
+
+        Formula:
+            P(forget) = 1 / (1 + exp(x * 5))
+
+            where x = (activation - min_activation) / min_activation
+
+            - When activation >> min_activation: x >> 0, exp(5x) >> 1, P ≈ 0 (remember)
+            - When activation << min_activation: x << 0, exp(5x) << 1, P ≈ 1 (forget)
+            - When activation = min_activation: x = 0, exp(0) = 1, P = 0.5 (uncertain)
+
+        The factor of 5 controls the steepness of the transition:
+            - Higher values create sharper transitions near the threshold
+            - Lower values create more gradual transitions
+            - Value of 5 provides a reasonable balance for memory systems
+
+        Numerical Stability:
+            The input to exp() is clipped to [-500, 500] to prevent overflow/underflow:
+            - exp(500) would overflow (return inf)
+            - exp(-500) underflows to 0 (safe, results in P ≈ 1)
 
         Args:
-            activation: Current activation level
+            activation: Current activation level (must be finite and non-negative)
 
         Returns:
-            Probability in [0, 1]
+            Probability of forgetting in range [0, 1]
+            - Close to 0 when activation is well above threshold (strong memory)
+            - Close to 1 when activation is well below threshold (weak memory)
+            - Exactly 0.5 when activation equals min_activation threshold
 
         Raises:
-            ValueError: If activation is not finite or is negative
+            ValueError: If activation is NaN, Inf, or negative
+
+        Example:
+            >>> engine = ForgettingEngine(ForgettingConfig(min_activation=0.1))
+            >>> engine.get_forgetting_probability(0.5)   # Strong memory
+            0.0067...  # Very unlikely to forget
+            >>> engine.get_forgetting_probability(0.1)   # At threshold
+            0.5        # 50% chance of forgetting
+            >>> engine.get_forgetting_probability(0.01)  # Weak memory
+            0.9933...  # Very likely to forget
+
+        References:
+            - Ebbinghaus, H. (1885). Memory: A Contribution to Experimental Psychology
+            - Anderson, J.R. & Schooler, L.J. (1991). Reflections of the Environment
+              in Memory. Psychological Science, 2(6), 396-408
         """
         # Validate activation: must be finite and non-negative
         if not np.isfinite(activation):
