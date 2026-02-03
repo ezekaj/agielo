@@ -231,7 +231,13 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
 ## Phase 7D: Code Quality Improvements
 
 ### 7D.1 - Consolidate Duplicate Code
-- [ ] In `integrations/active_learning.py` - Remove duplicate RND curiosity computation by keeping only `_compute_rnd_curiosity()` (the thread-safe version at line 223) and removing `_compute_rnd_curiosity_unlocked()` (line 375). Update all internal callers to use the locked version within appropriate lock blocks.
+- [x] In `integrations/active_learning.py` - Remove duplicate RND curiosity computation by keeping only `_compute_rnd_curiosity()` (the thread-safe version at line 223) and removing `_compute_rnd_curiosity_unlocked()` (line 375). Update all internal callers to use the locked version within appropriate lock blocks.
+  - **COMPLETED (2026-02-03)**: Removed duplicate `_compute_rnd_curiosity_unlocked()` function:
+    - Deleted the duplicate function that was at lines 375-386 (identical logic to `_compute_rnd_curiosity()`)
+    - Updated caller at line 341 in `record_exposure()` to use `_compute_rnd_curiosity()` instead
+    - Both methods had identical implementation - neither acquires locks internally; both are called from contexts already holding `self._lock`
+    - Note: `_update_rnd_predictor_unlocked()` was kept as it has distinct functionality
+  - All 25 active_learning_rnd tests pass, 454/455 total project tests pass (1 pre-existing failure in test_search.py unrelated to this change)
 
 ### 7D.2 - Add Cleanup/Atexit Handlers
 - [ ] Add `atexit` cleanup to `integrations/active_learning.py` - Register handler to save state and close resources on program exit.

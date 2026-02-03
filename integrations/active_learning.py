@@ -18,6 +18,7 @@ Based on:
 import numpy as np
 import json
 import os
+import time
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
@@ -337,7 +338,7 @@ class ActiveLearner:
             # Compute RND curiosity before updating predictor
             rnd_curiosity_score = 0.0
             if self.use_rnd and self.rnd_curiosity is not None:
-                rnd_curiosity_score = self._compute_rnd_curiosity_unlocked(topic, content)
+                rnd_curiosity_score = self._compute_rnd_curiosity(topic, content)
 
             # Update RND predictor after successful learning
             if was_successful and self.use_rnd and self.rnd_curiosity is not None:
@@ -370,19 +371,6 @@ class ActiveLearner:
             # Auto-save periodically
             if len(self.history) % 50 == 0:
                 self._save_state()
-
-    def _compute_rnd_curiosity_unlocked(self, topic: str, content: str = "") -> float:
-        """Compute RND curiosity without acquiring lock (for internal use)."""
-        if not self.use_rnd or self.rnd_curiosity is None:
-            return 0.5
-
-        try:
-            embedding = self._get_topic_embedding(topic, content)
-            if embedding is None:
-                return 0.5
-            return self.rnd_curiosity.compute_curiosity(embedding)
-        except Exception:
-            return 0.5
 
     def _update_rnd_predictor_unlocked(self, topic: str, content: str = ""):
         """Update RND predictor after successful learning (without lock)."""
@@ -576,6 +564,77 @@ class ActiveLearner:
             weight: Weight between 0 and 1 (default 0.5)
         """
         self._rnd_weight = max(0.0, min(1.0, weight))
+
+    def get_low_confidence_topics(self, n: int = 5) -> List[Dict]:
+        """
+        Get topics with low confidence (gaps in knowledge).
+
+        Used by AutonomousWorker to identify what to learn.
+        """
+        with self._lock:
+            low_conf = []
+            for name, topic in self.topics.items():
+                if topic.confidence < 0.5:
+                    low_conf.append({
+                        'name': name,
+                        'confidence': topic.confidence,
+                        'curiosity': topic.curiosity,
+                        'priority': topic.learning_priority
+                    })
+
+            # Sort by priority (highest first)
+            low_conf.sort(key=lambda x: x['priority'], reverse=True)
+            return low_conf[:n]
+
+    def get_high_curiosity_areas(self, n: int = 5) -> List[str]:
+        """
+        Get areas with high curiosity (novel/unexplored).
+
+        Used by AutonomousWorker for exploration.
+        """
+        with self._lock:
+            high_curiosity = []
+            for name, topic in self.topics.items():
+                if topic.curiosity > 0.6:
+                    high_curiosity.append((name, topic.curiosity))
+
+            # Sort by curiosity (highest first)
+            high_curiosity.sort(key=lambda x: x[1], reverse=True)
+            return [name for name, _ in high_curiosity[:n]]
+
+    def record_learning(self, topic: str, was_correct: bool,
+                        confidence_before: float, confidence_after: float):
+        """
+        Record a learning event.
+
+        Used by AutonomousWorker to track learning progress.
+        """
+        with self._lock:
+            # Create topic if doesn't exist
+            if topic not in self.topics:
+                self.topics[topic] = Topic(name=topic)
+
+            t = self.topics[topic]
+            t.exposure_count += 1
+            if was_correct:
+                t.success_count += 1
+            t.confidence = confidence_after
+            t.last_seen = time.time()
+
+            # Record event
+            event = LearningEvent(
+                topic=topic,
+                timestamp=time.time(),
+                was_correct=was_correct,
+                confidence_before=confidence_before,
+                confidence_after=confidence_after,
+                rnd_curiosity=self._compute_rnd_curiosity(topic, "")
+            )
+            self.history.append(event)
+
+            # Save periodically
+            if len(self.history) % 10 == 0:
+                self._save_state()
 
     def _save_state(self):
         """Save state to disk."""
