@@ -22,7 +22,7 @@ import time
 import atexit
 import weakref
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any, Callable, Union
 from dataclasses import dataclass, field
 from pathlib import Path
 import threading
@@ -119,7 +119,7 @@ class LearningEvent:
 _active_learner_instances: List[weakref.ref] = []
 
 
-def _cleanup_all_instances():
+def _cleanup_all_instances() -> None:
     """Cleanup function called at program exit to save all ActiveLearner state."""
     for ref in _active_learner_instances:
         instance = ref()
@@ -131,7 +131,7 @@ def _cleanup_all_instances():
 atexit.register(_cleanup_all_instances)
 
 
-def _register_instance(instance: 'ActiveLearner'):
+def _register_instance(instance: 'ActiveLearner') -> None:
     """Register an ActiveLearner instance for cleanup on exit."""
     _active_learner_instances.append(weakref.ref(instance))
 
@@ -148,7 +148,7 @@ class ActiveLearner:
     5. Explore novel areas using RND curiosity
     """
 
-    def __init__(self, storage_path: str = None, use_rnd: bool = True):
+    def __init__(self, storage_path: Optional[str] = None, use_rnd: bool = True) -> None:
         self.storage_path = Path(storage_path or os.path.expanduser("~/.cognitive_ai_knowledge/active_learning"))
         self.storage_path.mkdir(parents=True, exist_ok=True)
 
@@ -329,13 +329,13 @@ class ActiveLearner:
 
         return embedding
 
-    def _record_novel_discovery(self):
+    def _record_novel_discovery(self) -> None:
         """Record a novel topic discovery for statistics."""
         self._rnd_stats['novel_discoveries'] += 1
 
     def record_exposure(self, topic: str, was_successful: bool,
                        surprise_level: float = 0.5, complexity: float = 0.5,
-                       content: str = ""):
+                       content: str = "") -> None:
         """
         Record that we encountered/learned about a topic.
 
@@ -416,7 +416,7 @@ class ActiveLearner:
             if len(self.history) % 50 == 0:
                 self._save_state()
 
-    def _update_rnd_predictor_unlocked(self, topic: str, content: str = ""):
+    def _update_rnd_predictor_unlocked(self, topic: str, content: str = "") -> None:
         """Update RND predictor after successful learning (without lock)."""
         if not self.use_rnd or self.rnd_curiosity is None:
             return
@@ -430,7 +430,7 @@ class ActiveLearner:
         except Exception:
             pass
 
-    def _update_curiosity_decay_stats(self):
+    def _update_curiosity_decay_stats(self) -> None:
         """Update curiosity decay tracking statistics."""
         # Only update periodically to avoid overhead
         if len(self.history) % 10 != 0:
@@ -509,7 +509,7 @@ class ActiveLearner:
 
         return [name for name, _ in topic_times[:k]]
 
-    def add_topic_relation(self, topic1: str, topic2: str):
+    def add_topic_relation(self, topic1: str, topic2: str) -> None:
         """Record that two topics are related."""
         with self._lock:
             for topic in [topic1, topic2]:
@@ -521,14 +521,14 @@ class ActiveLearner:
             if topic1 not in self.topics[topic2].related_topics:
                 self.topics[topic2].related_topics.append(topic1)
 
-    def boost_curiosity(self, topic: str, amount: float = DEFAULT_CURIOSITY_BOOST):
+    def boost_curiosity(self, topic: str, amount: float = DEFAULT_CURIOSITY_BOOST) -> None:
         """Manually boost curiosity for a topic (e.g., user showed interest)."""
         with self._lock:
             if topic not in self.topics:
                 self.topics[topic] = Topic(name=topic)
             self.topics[topic].curiosity = min(1.0, self.topics[topic].curiosity + amount)
 
-    def get_stats(self) -> Dict:
+    def get_stats(self) -> Dict[str, Any]:
         """Get learning statistics including RND curiosity metrics."""
         with self._lock:
             if not self.topics:
@@ -556,12 +556,12 @@ class ActiveLearner:
 
             return stats
 
-    def get_rnd_stats(self) -> Dict:
+    def get_rnd_stats(self) -> Dict[str, Any]:
         """Get RND curiosity-specific statistics."""
         with self._lock:
             return self.get_rnd_stats_unlocked()
 
-    def get_rnd_stats_unlocked(self) -> Dict:
+    def get_rnd_stats_unlocked(self) -> Dict[str, Any]:
         """Get RND curiosity stats without lock (for internal use)."""
         if not self.use_rnd or self.rnd_curiosity is None:
             return {
@@ -600,7 +600,7 @@ class ActiveLearner:
             'rnd_exploration': rnd_exploration_stats,
         }
 
-    def set_rnd_weight(self, weight: float):
+    def set_rnd_weight(self, weight: float) -> None:
         """
         Set the weight for RND curiosity in combined scoring.
 
@@ -609,7 +609,7 @@ class ActiveLearner:
         """
         self._rnd_weight = max(0.0, min(1.0, weight))
 
-    def get_low_confidence_topics(self, n: int = 5) -> List[Dict]:
+    def get_low_confidence_topics(self, n: int = 5) -> List[Dict[str, Any]]:
         """
         Get topics with low confidence (gaps in knowledge).
 
@@ -647,7 +647,7 @@ class ActiveLearner:
             return [name for name, _ in high_curiosity[:n]]
 
     def record_learning(self, topic: str, was_correct: bool,
-                        confidence_before: float, confidence_after: float):
+                        confidence_before: float, confidence_after: float) -> None:
         """
         Record a learning event.
 
@@ -680,7 +680,7 @@ class ActiveLearner:
             if len(self.history) % 10 == 0:
                 self._save_state()
 
-    def _save_state(self):
+    def _save_state(self) -> None:
         """Save state to disk."""
         try:
             state = {
@@ -722,7 +722,7 @@ class ActiveLearner:
         except Exception as e:
             print(f"[ActiveLearner] Save error: {e}")
 
-    def _load_state(self):
+    def _load_state(self) -> None:
         """Load state from disk."""
         state_file = self.storage_path / 'state.json'
         if not state_file.exists():
@@ -770,7 +770,7 @@ class ActiveLearner:
         except Exception as e:
             print(f"[ActiveLearner] Load error: {e}")
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """
         Cleanup resources and save state on exit.
 
@@ -805,7 +805,7 @@ class CurriculumLearner:
     Builds on ActiveLearner by organizing topics into a learning path.
     """
 
-    def __init__(self, active_learner: ActiveLearner):
+    def __init__(self, active_learner: ActiveLearner) -> None:
         self.learner = active_learner
 
         # Topic dependencies: topic -> prerequisites
@@ -814,11 +814,11 @@ class CurriculumLearner:
         # Difficulty levels
         self.difficulty: Dict[str, float] = {}
 
-    def set_prerequisites(self, topic: str, prereqs: List[str]):
+    def set_prerequisites(self, topic: str, prereqs: List[str]) -> None:
         """Set prerequisites for a topic."""
         self.prerequisites[topic] = prereqs
 
-    def set_difficulty(self, topic: str, difficulty: float):
+    def set_difficulty(self, topic: str, difficulty: float) -> None:
         """Set difficulty level (0-1) for a topic."""
         self.difficulty[topic] = difficulty
 

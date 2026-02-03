@@ -358,7 +358,28 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 169 related tests pass (32 active_learning, 81 forgetting, 56 episodic memory)
 
 ### 7D.4 - Add Missing Type Hints
-- [ ] Add type hints to all public functions in `integrations/active_learning.py` - Especially `set_llm_interface()` and callback functions.
+- [x] Add type hints to all public functions in `integrations/active_learning.py` - Especially `set_llm_interface()` and callback functions.
+  - **COMPLETED (2026-02-03)**: Added comprehensive type hints to all public methods:
+    - Updated typing imports to include `Any`, `Callable`, `Union`
+    - `ActiveLearner.__init__`: Added `Optional[str]` for storage_path, `-> None` return type
+    - `should_learn()`: Already had correct `-> Tuple[bool, float, str]` return type
+    - `record_exposure()`: Added `-> None` return type
+    - `get_learning_recommendations()`: Already had correct `-> List[Tuple[str, float, str]]` return type
+    - `get_related_topics()`: Already had correct `-> List[str]` return type
+    - `add_topic_relation()`: Added `-> None` return type
+    - `boost_curiosity()`: Added `-> None` return type
+    - `get_stats()`: Updated to `-> Dict[str, Any]` for precise typing
+    - `get_rnd_stats()`: Updated to `-> Dict[str, Any]`
+    - `get_rnd_stats_unlocked()`: Updated to `-> Dict[str, Any]`
+    - `set_rnd_weight()`: Added `-> None` return type
+    - `get_low_confidence_topics()`: Updated to `-> List[Dict[str, Any]]`
+    - `get_high_curiosity_areas()`: Already had correct `-> List[str]` return type
+    - `record_learning()`: Added `-> None` return type
+    - `cleanup()`: Added `-> None` return type
+    - `CurriculumLearner.__init__`, `set_prerequisites()`, `set_difficulty()`: Added `-> None` return types
+    - Module functions `_cleanup_all_instances()`, `_register_instance()`: Added `-> None` return types
+  - Note: `set_llm_interface()` method does not exist in this file - task description was outdated
+  - All 32 active_learning_rnd tests pass
 
 - [ ] Add type hints to all public functions in `neuro_memory/memory/episodic_store.py`.
 
