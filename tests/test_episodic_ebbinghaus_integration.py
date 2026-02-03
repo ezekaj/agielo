@@ -376,5 +376,81 @@ class TestIntegrationWithRetentionDecay:
         assert retention_after_retrieval > retention_after_12h
 
 
+class TestVectorDBBackendValidation:
+    """Test vector database backend selection and validation."""
+
+    @pytest.fixture
+    def temp_dir(self):
+        """Create a temporary directory."""
+        temp = tempfile.mkdtemp()
+        yield temp
+        shutil.rmtree(temp, ignore_errors=True)
+
+    def test_chromadb_backend_works(self, temp_dir):
+        """Test that ChromaDB backend initializes correctly."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            vector_db_backend="chromadb",
+            enable_ebbinghaus=False
+        )
+        store = EpisodicMemoryStore(config)
+
+        # Should initialize ChromaDB
+        assert hasattr(store, 'chroma_client')
+        assert hasattr(store, 'collection')
+        assert store.config.vector_db_backend == "chromadb"
+
+        # Should be able to store episodes
+        content = np.random.randn(10)
+        episode = store.store_episode(content=content, surprise=1.0)
+        assert episode is not None
+
+    def test_faiss_backend_falls_back_to_chromadb(self, temp_dir):
+        """Test that FAISS backend falls back to ChromaDB with warning."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            vector_db_backend="faiss",  # Request FAISS
+            enable_ebbinghaus=False
+        )
+
+        # Should emit a warning and fall back to ChromaDB
+        import warnings
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            store = EpisodicMemoryStore(config)
+
+            # Check warning was issued
+            assert len(w) == 1
+            assert "FAISS backend is not yet implemented" in str(w[0].message)
+            assert "Falling back to ChromaDB" in str(w[0].message)
+
+        # Config should be updated to reflect actual backend
+        assert store.config.vector_db_backend == "chromadb"
+
+        # ChromaDB should be initialized
+        assert hasattr(store, 'chroma_client')
+        assert hasattr(store, 'collection')
+
+        # Should still be able to store episodes
+        content = np.random.randn(10)
+        episode = store.store_episode(content=content, surprise=1.0)
+        assert episode is not None
+
+    def test_unknown_backend_raises_error(self, temp_dir):
+        """Test that unknown backend raises ValueError."""
+        config = EpisodicMemoryConfig(
+            persistence_path=temp_dir,
+            vector_db_backend="unknown_backend",
+            enable_ebbinghaus=False
+        )
+
+        with pytest.raises(ValueError) as exc_info:
+            EpisodicMemoryStore(config)
+
+        assert "Unknown vector_db_backend" in str(exc_info.value)
+        assert "unknown_backend" in str(exc_info.value)
+        assert "chromadb" in str(exc_info.value)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

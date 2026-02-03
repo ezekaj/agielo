@@ -183,7 +183,20 @@ class EpisodicMemoryStore:
         
     def _initialize_vector_db(self):
         """Initialize vector database for similarity search."""
-        if self.config.vector_db_backend == "chromadb":
+        backend = self.config.vector_db_backend
+
+        # Validate backend selection - FAISS not yet implemented
+        if backend == "faiss":
+            import warnings
+            warnings.warn(
+                "FAISS backend is not yet implemented. Falling back to ChromaDB. "
+                "To use FAISS in the future, update the episodic_store.py implementation.",
+                UserWarning
+            )
+            backend = "chromadb"
+            self.config.vector_db_backend = "chromadb"  # Update config to reflect actual backend
+
+        if backend == "chromadb":
             # Initialize ChromaDB with proper persistent client
             if self.config.persistence_path:
                 chroma_path = Path(self.config.persistence_path) / "chroma"
@@ -202,8 +215,11 @@ class EpisodicMemoryStore:
                 metadata={"description": "Human-inspired episodic memory storage"}
             )
         else:
-            # FAISS initialization (future implementation)
-            raise NotImplementedError("FAISS backend not yet implemented")
+            # Unknown backend
+            raise ValueError(
+                f"Unknown vector_db_backend: '{backend}'. "
+                f"Supported backends: 'chromadb'. FAISS support planned for future release."
+            )
 
     def _initialize_ebbinghaus(self):
         """Initialize Ebbinghaus forgetting and spaced repetition systems."""
