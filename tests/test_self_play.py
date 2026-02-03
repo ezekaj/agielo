@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from integrations.self_play import (
     SelfPlayTrainer, SelfPlayQuestion, SelfPlayAttempt,
-    Difficulty, SelfPlayRound
+    Difficulty, SelfPlayRound, DifficultyProgression
 )
 
 
@@ -431,6 +431,219 @@ class TestDifficultyLevels:
                       ["analyze", "design", "evaluate", "synthesize", "implement", "consequences"])
 
 
+class TestDifficultyProgression:
+    """Tests for adaptive difficulty progression system."""
+
+    def test_initial_difficulty(self):
+        """Progression should start at specified difficulty."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        assert prog.get_current_difficulty() == Difficulty.EASY
+
+        prog2 = DifficultyProgression(Difficulty.MEDIUM)
+        assert prog2.get_current_difficulty() == Difficulty.MEDIUM
+
+    def test_record_round_performance(self):
+        """Recording performance should add to history."""
+        prog = DifficultyProgression()
+        prog.record_round_performance(0.8, Difficulty.EASY)
+        assert len(prog.round_history) == 1
+        assert prog.round_history[0]['correct_rate'] == 0.8
+        assert prog.round_history[0]['difficulty'] == 'easy'
+
+    def test_no_adjustment_with_insufficient_rounds(self):
+        """Should not adjust with fewer than MIN_ROUNDS_FOR_ADJUSTMENT rounds."""
+        prog = DifficultyProgression()
+        prog.record_round_performance(0.9, Difficulty.EASY)
+        prog.record_round_performance(0.9, Difficulty.EASY)
+        # Only 2 rounds, need 3 minimum
+        assert prog.should_adjust_difficulty() is None
+
+    def test_increase_difficulty_on_high_performance(self):
+        """Should increase difficulty when >80% correct."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        # Record 3 rounds with >80% correct rate
+        prog.record_round_performance(0.85, Difficulty.EASY)
+        prog.record_round_performance(0.90, Difficulty.EASY)
+        prog.record_round_performance(0.88, Difficulty.EASY)
+
+        assert prog.should_adjust_difficulty() == 'increase'
+
+    def test_decrease_difficulty_on_low_performance(self):
+        """Should decrease difficulty when <50% correct."""
+        prog = DifficultyProgression(Difficulty.MEDIUM)
+        # Record 3 rounds with <50% correct rate
+        prog.record_round_performance(0.40, Difficulty.MEDIUM)
+        prog.record_round_performance(0.35, Difficulty.MEDIUM)
+        prog.record_round_performance(0.45, Difficulty.MEDIUM)
+
+        assert prog.should_adjust_difficulty() == 'decrease'
+
+    def test_no_adjustment_in_middle_range(self):
+        """Should not adjust when performance is 50-80%."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        # Record 3 rounds with 50-80% correct rate
+        prog.record_round_performance(0.65, Difficulty.EASY)
+        prog.record_round_performance(0.70, Difficulty.EASY)
+        prog.record_round_performance(0.60, Difficulty.EASY)
+
+        assert prog.should_adjust_difficulty() is None
+
+    def test_adjust_difficulty_increases(self):
+        """adjust_difficulty should move from EASY to MEDIUM."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        prog.record_round_performance(0.85, Difficulty.EASY)
+        prog.record_round_performance(0.90, Difficulty.EASY)
+        prog.record_round_performance(0.88, Difficulty.EASY)
+
+        new_diff, msg = prog.adjust_difficulty()
+        assert new_diff == Difficulty.MEDIUM
+        assert 'Increased' in msg
+
+    def test_adjust_difficulty_decreases(self):
+        """adjust_difficulty should move from MEDIUM to EASY."""
+        prog = DifficultyProgression(Difficulty.MEDIUM)
+        prog.record_round_performance(0.40, Difficulty.MEDIUM)
+        prog.record_round_performance(0.35, Difficulty.MEDIUM)
+        prog.record_round_performance(0.45, Difficulty.MEDIUM)
+
+        new_diff, msg = prog.adjust_difficulty()
+        assert new_diff == Difficulty.EASY
+        assert 'Decreased' in msg
+
+    def test_cannot_increase_past_hard(self):
+        """Should stay at HARD even with high performance."""
+        prog = DifficultyProgression(Difficulty.HARD)
+        prog.record_round_performance(0.90, Difficulty.HARD)
+        prog.record_round_performance(0.95, Difficulty.HARD)
+        prog.record_round_performance(0.92, Difficulty.HARD)
+
+        new_diff, msg = prog.adjust_difficulty()
+        assert new_diff == Difficulty.HARD
+        assert 'maximum' in msg.lower()
+
+    def test_cannot_decrease_past_easy(self):
+        """Should stay at EASY even with low performance."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        prog.record_round_performance(0.30, Difficulty.EASY)
+        prog.record_round_performance(0.25, Difficulty.EASY)
+        prog.record_round_performance(0.35, Difficulty.EASY)
+
+        new_diff, msg = prog.adjust_difficulty()
+        assert new_diff == Difficulty.EASY
+        assert 'minimum' in msg.lower()
+
+    def test_set_difficulty_manual(self):
+        """Should be able to manually set difficulty."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        prog.set_difficulty(Difficulty.HARD)
+        assert prog.get_current_difficulty() == Difficulty.HARD
+        assert len(prog.difficulty_changes) == 1
+        assert prog.difficulty_changes[0]['reason'] == 'manual'
+
+    def test_to_dict_from_dict(self):
+        """Should serialize and deserialize correctly."""
+        prog = DifficultyProgression(Difficulty.MEDIUM)
+        prog.record_round_performance(0.7, Difficulty.MEDIUM)
+        prog.record_round_performance(0.8, Difficulty.MEDIUM)
+
+        data = prog.to_dict()
+        prog2 = DifficultyProgression.from_dict(data)
+
+        assert prog2.current_difficulty == Difficulty.MEDIUM
+        assert len(prog2.round_history) == 2
+
+    def test_get_progression_stats(self):
+        """Should return comprehensive stats."""
+        prog = DifficultyProgression(Difficulty.EASY)
+        prog.record_round_performance(0.8, Difficulty.EASY)
+        prog.record_round_performance(0.9, Difficulty.EASY)
+
+        stats = prog.get_progression_stats()
+        assert 'current_difficulty' in stats
+        assert 'total_rounds' in stats
+        assert 'rounds_by_difficulty' in stats
+        assert stats['current_difficulty'] == 'easy'
+        assert stats['total_rounds'] == 2
+
+
+class TestSelfPlayTrainerWithAdaptiveDifficulty:
+    """Tests for SelfPlayTrainer with adaptive difficulty."""
+
+    def setup_method(self):
+        self.temp_dir = Path(tempfile.mkdtemp())
+        self.trainer = SelfPlayTrainer(self.temp_dir, adaptive_difficulty=True)
+
+    def teardown_method(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_trainer_has_difficulty_progression(self):
+        """Trainer should have difficulty progression attribute."""
+        assert hasattr(self.trainer, 'difficulty_progression')
+        assert isinstance(self.trainer.difficulty_progression, DifficultyProgression)
+
+    def test_get_current_difficulty(self):
+        """Should be able to get current difficulty from trainer."""
+        diff = self.trainer.get_current_difficulty()
+        assert isinstance(diff, Difficulty)
+        assert diff == Difficulty.EASY  # Default start
+
+    def test_set_difficulty(self):
+        """Should be able to manually set difficulty."""
+        self.trainer.set_difficulty(Difficulty.HARD)
+        assert self.trainer.get_current_difficulty() == Difficulty.HARD
+
+    def test_difficulty_in_stats(self):
+        """Stats should include difficulty info."""
+        stats = self.trainer.get_stats()
+        assert 'current_difficulty' in stats
+        assert 'adaptive_difficulty' in stats
+        assert stats['adaptive_difficulty'] is True
+
+    def test_round_uses_adaptive_difficulty(self):
+        """Round should use adaptive difficulty when no explicit difficulty."""
+        self.trainer.set_difficulty(Difficulty.MEDIUM)
+        results = self.trainer.run_self_play_round(
+            topics=["test"],
+            n_questions=1
+            # No difficulty parameter = use adaptive
+        )
+        assert results['difficulty_used'] == 'medium'
+
+    def test_round_overrides_adaptive_with_explicit(self):
+        """Explicit difficulty should override adaptive."""
+        self.trainer.set_difficulty(Difficulty.MEDIUM)
+        results = self.trainer.run_self_play_round(
+            topics=["test"],
+            n_questions=1,
+            difficulty=Difficulty.HARD  # Explicit
+        )
+        assert results['difficulty_used'] == 'hard'
+
+    def test_difficulty_progression_stats(self):
+        """Should get difficulty progression stats."""
+        stats = self.trainer.get_difficulty_progression_stats()
+        assert 'current_difficulty' in stats
+        assert 'total_rounds' in stats
+
+    def test_difficulty_persists_across_instances(self):
+        """Difficulty should persist when reloading trainer."""
+        self.trainer.set_difficulty(Difficulty.HARD)
+        self.trainer._save_state()
+
+        # Create new instance from same directory
+        trainer2 = SelfPlayTrainer(self.temp_dir, adaptive_difficulty=True)
+        assert trainer2.get_current_difficulty() == Difficulty.HARD
+
+    def test_adaptive_disabled(self):
+        """When adaptive is disabled, should use EASY default."""
+        trainer = SelfPlayTrainer(self.temp_dir, adaptive_difficulty=False)
+        results = trainer.run_self_play_round(
+            topics=["test"],
+            n_questions=1
+        )
+        assert results['difficulty_used'] == 'easy'
+
+
 def run_tests():
     """Run all tests and report results."""
     import traceback
@@ -444,6 +657,8 @@ def run_tests():
         TestSelfPlayMetrics,
         TestSelfPlayPersistence,
         TestDifficultyLevels,
+        TestDifficultyProgression,
+        TestSelfPlayTrainerWithAdaptiveDifficulty,
     ]
 
     total_passed = 0

@@ -75,6 +75,175 @@ class SelfPlayRound:
     difficulty: Difficulty
 
 
+class DifficultyProgression:
+    """
+    Adaptive difficulty progression system.
+
+    Tracks performance and automatically adjusts difficulty:
+    - Increase difficulty when correct rate > 80%
+    - Decrease difficulty when correct rate < 50%
+    - Stay at current level between 50-80%
+    """
+
+    # Thresholds for difficulty adjustment
+    INCREASE_THRESHOLD = 0.80  # >80% correct -> increase difficulty
+    DECREASE_THRESHOLD = 0.50  # <50% correct -> decrease difficulty
+    MIN_ROUNDS_FOR_ADJUSTMENT = 3  # Minimum rounds before adjusting
+
+    # Difficulty progression order
+    DIFFICULTY_ORDER = [Difficulty.EASY, Difficulty.MEDIUM, Difficulty.HARD]
+
+    def __init__(self, initial_difficulty: Difficulty = Difficulty.EASY):
+        """
+        Initialize difficulty progression.
+
+        Args:
+            initial_difficulty: Starting difficulty level
+        """
+        self.current_difficulty = initial_difficulty
+        self.round_history: List[Dict] = []  # Track performance per round
+        self.difficulty_changes: List[Dict] = []  # Track difficulty transitions
+
+    def get_current_difficulty(self) -> Difficulty:
+        """Get the current adaptive difficulty level."""
+        return self.current_difficulty
+
+    def get_difficulty_index(self, difficulty: Difficulty) -> int:
+        """Get the index of a difficulty level in the progression order."""
+        return self.DIFFICULTY_ORDER.index(difficulty)
+
+    def record_round_performance(self, correct_rate: float, difficulty: Difficulty) -> None:
+        """
+        Record performance for a round.
+
+        Args:
+            correct_rate: Percentage of correct answers (0.0 to 1.0)
+            difficulty: Difficulty level of the round
+        """
+        self.round_history.append({
+            'correct_rate': correct_rate,
+            'difficulty': difficulty.value,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    def should_adjust_difficulty(self) -> Optional[str]:
+        """
+        Determine if difficulty should be adjusted based on recent performance.
+
+        Returns:
+            'increase', 'decrease', or None
+        """
+        if len(self.round_history) < self.MIN_ROUNDS_FOR_ADJUSTMENT:
+            return None
+
+        # Get recent rounds at current difficulty
+        recent_rounds = [
+            r for r in self.round_history[-self.MIN_ROUNDS_FOR_ADJUSTMENT:]
+            if r['difficulty'] == self.current_difficulty.value
+        ]
+
+        if len(recent_rounds) < self.MIN_ROUNDS_FOR_ADJUSTMENT:
+            return None
+
+        avg_correct_rate = sum(r['correct_rate'] for r in recent_rounds) / len(recent_rounds)
+
+        if avg_correct_rate > self.INCREASE_THRESHOLD:
+            return 'increase'
+        elif avg_correct_rate < self.DECREASE_THRESHOLD:
+            return 'decrease'
+
+        return None
+
+    def adjust_difficulty(self) -> Tuple[Difficulty, str]:
+        """
+        Adjust difficulty based on performance.
+
+        Returns:
+            (new_difficulty, adjustment_description)
+        """
+        adjustment = self.should_adjust_difficulty()
+        old_difficulty = self.current_difficulty
+
+        if adjustment == 'increase':
+            current_index = self.get_difficulty_index(self.current_difficulty)
+            if current_index < len(self.DIFFICULTY_ORDER) - 1:
+                self.current_difficulty = self.DIFFICULTY_ORDER[current_index + 1]
+                change = f"Increased from {old_difficulty.value} to {self.current_difficulty.value}"
+                self.difficulty_changes.append({
+                    'from': old_difficulty.value,
+                    'to': self.current_difficulty.value,
+                    'reason': 'performance > 80%',
+                    'timestamp': datetime.now().isoformat()
+                })
+                return self.current_difficulty, change
+            else:
+                return self.current_difficulty, "Already at maximum difficulty (HARD)"
+
+        elif adjustment == 'decrease':
+            current_index = self.get_difficulty_index(self.current_difficulty)
+            if current_index > 0:
+                self.current_difficulty = self.DIFFICULTY_ORDER[current_index - 1]
+                change = f"Decreased from {old_difficulty.value} to {self.current_difficulty.value}"
+                self.difficulty_changes.append({
+                    'from': old_difficulty.value,
+                    'to': self.current_difficulty.value,
+                    'reason': 'performance < 50%',
+                    'timestamp': datetime.now().isoformat()
+                })
+                return self.current_difficulty, change
+            else:
+                return self.current_difficulty, "Already at minimum difficulty (EASY)"
+
+        return self.current_difficulty, "No adjustment needed"
+
+    def set_difficulty(self, difficulty: Difficulty) -> None:
+        """Manually set difficulty level."""
+        old = self.current_difficulty
+        self.current_difficulty = difficulty
+        if old != difficulty:
+            self.difficulty_changes.append({
+                'from': old.value,
+                'to': difficulty.value,
+                'reason': 'manual',
+                'timestamp': datetime.now().isoformat()
+            })
+
+    def get_progression_stats(self) -> Dict[str, Any]:
+        """Get statistics about difficulty progression."""
+        rounds_by_difficulty = {}
+        for diff in Difficulty:
+            rounds_at_diff = [r for r in self.round_history if r['difficulty'] == diff.value]
+            if rounds_at_diff:
+                rounds_by_difficulty[diff.value] = {
+                    'count': len(rounds_at_diff),
+                    'avg_correct_rate': sum(r['correct_rate'] for r in rounds_at_diff) / len(rounds_at_diff)
+                }
+
+        return {
+            'current_difficulty': self.current_difficulty.value,
+            'total_rounds': len(self.round_history),
+            'difficulty_changes': len(self.difficulty_changes),
+            'rounds_by_difficulty': rounds_by_difficulty,
+            'change_history': self.difficulty_changes[-5:] if self.difficulty_changes else []
+        }
+
+    def to_dict(self) -> Dict:
+        """Serialize to dictionary for persistence."""
+        return {
+            'current_difficulty': self.current_difficulty.value,
+            'round_history': self.round_history,
+            'difficulty_changes': self.difficulty_changes
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'DifficultyProgression':
+        """Deserialize from dictionary."""
+        progression = cls(Difficulty(data.get('current_difficulty', 'easy')))
+        progression.round_history = data.get('round_history', [])
+        progression.difficulty_changes = data.get('difficulty_changes', [])
+        return progression
+
+
 class SelfPlayTrainer:
     """
     Self-play training system for autonomous improvement.
@@ -110,18 +279,20 @@ class SelfPlayTrainer:
         "What are the long-term consequences of advances in {topic}?",
     ]
 
-    def __init__(self, storage_dir: Path = None, llm_url: str = None):
+    def __init__(self, storage_dir: Path = None, llm_url: str = None, adaptive_difficulty: bool = True):
         """
         Initialize the self-play trainer.
 
         Args:
             storage_dir: Directory to store self-play state
             llm_url: URL for LLM API (default: LM Studio local)
+            adaptive_difficulty: Enable adaptive difficulty progression (default: True)
         """
         self.storage_dir = storage_dir or EVOLUTION_DIR / "self_play"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
         self.llm_url = llm_url or "http://localhost:1234/v1/chat/completions"
+        self.adaptive_difficulty = adaptive_difficulty
 
         # State files
         self.state_file = self.storage_dir / "self_play_state.json"
@@ -138,7 +309,16 @@ class SelfPlayTrainer:
         self.questions_correct = self.state.get('questions_correct', 0)
         self.improvement_history: List[Dict] = self.state.get('improvement_history', [])
 
+        # Initialize or restore difficulty progression
+        if 'difficulty_progression' in self.state:
+            self.difficulty_progression = DifficultyProgression.from_dict(
+                self.state['difficulty_progression']
+            )
+        else:
+            self.difficulty_progression = DifficultyProgression(Difficulty.EASY)
+
         print(f"[SelfPlay] Initialized with {self.questions_generated} questions generated")
+        print(f"[SelfPlay] Current difficulty: {self.difficulty_progression.current_difficulty.value}")
 
     def _load_state(self):
         """Load self-play state from disk."""
@@ -216,6 +396,10 @@ class SelfPlayTrainer:
         self.state['questions_correct'] = self.questions_correct
         self.state['improvement_history'] = self.improvement_history
         self.state['last_updated'] = datetime.now().isoformat()
+
+        # Save difficulty progression state
+        self.state['difficulty_progression'] = self.difficulty_progression.to_dict()
+        self.state['current_difficulty'] = self.difficulty_progression.current_difficulty.value
 
         with open(self.state_file, 'w') as f:
             json.dump(self.state, f, indent=2)
@@ -523,7 +707,7 @@ EVALUATION: Your explanation"""
         self,
         topics: List[str],
         n_questions: int = 5,
-        difficulty: Difficulty = Difficulty.EASY
+        difficulty: Difficulty = None
     ) -> Dict[str, Any]:
         """
         Run a complete self-play training round.
@@ -531,11 +715,17 @@ EVALUATION: Your explanation"""
         Args:
             topics: List of topics to generate questions about
             n_questions: Number of questions to generate
-            difficulty: Difficulty level for questions
+            difficulty: Difficulty level for questions (None = use adaptive difficulty)
 
         Returns:
             Round results with metrics
         """
+        # Use adaptive difficulty if enabled and no explicit difficulty provided
+        if difficulty is None and self.adaptive_difficulty:
+            difficulty = self.difficulty_progression.get_current_difficulty()
+        elif difficulty is None:
+            difficulty = Difficulty.EASY
+
         round_id = hashlib.md5(
             f"{','.join(topics)}{n_questions}{datetime.now().isoformat()}".encode()
         ).hexdigest()[:12]
@@ -554,7 +744,7 @@ EVALUATION: Your explanation"""
 
         print(f"\n[SelfPlay] Starting round {round_id}")
         print(f"[SelfPlay] Topics: {topics}")
-        print(f"[SelfPlay] Difficulty: {difficulty.value}")
+        print(f"[SelfPlay] Difficulty: {difficulty.value} {'(adaptive)' if self.adaptive_difficulty else ''}")
         print(f"[SelfPlay] Questions: {n_questions}")
 
         results = {
@@ -633,6 +823,19 @@ EVALUATION: Your explanation"""
             'questions': n_questions
         })
 
+        # Record performance for difficulty progression
+        self.difficulty_progression.record_round_performance(
+            round_record.correct_rate, difficulty
+        )
+
+        # Adjust difficulty if adaptive mode is enabled
+        difficulty_change = None
+        if self.adaptive_difficulty:
+            new_difficulty, change_msg = self.difficulty_progression.adjust_difficulty()
+            if change_msg != "No adjustment needed":
+                difficulty_change = change_msg
+                print(f"[SelfPlay] Difficulty adjusted: {change_msg}")
+
         # Save state
         self._save_state()
 
@@ -641,11 +844,15 @@ EVALUATION: Your explanation"""
             results['correct_count'] / n_questions if n_questions > 0 else 0.0
         )
         results['avg_score'] = results['total_score'] / n_questions if n_questions > 0 else 0.0
+        results['difficulty_used'] = difficulty.value
+        results['difficulty_change'] = difficulty_change
 
         print(f"\n[SelfPlay] Round Complete")
         print(f"[SelfPlay] Correct: {results['correct_count']}/{n_questions} ({results['correct_rate']:.1%})")
         print(f"[SelfPlay] Avg Score: {results['avg_score']:.1%}")
         print(f"[SelfPlay] Mistakes Learned: {results['mistakes_learned']}")
+        if difficulty_change:
+            print(f"[SelfPlay] {difficulty_change}")
 
         return results
 
@@ -674,8 +881,93 @@ EVALUATION: Your explanation"""
             'total_rounds': len(self.rounds),
             'improvement_history_points': len(self.improvement_history),
             'last_round': self.rounds[-1].round_id if self.rounds else None,
-            'last_round_rate': self.rounds[-1].correct_rate if self.rounds else None
+            'last_round_rate': self.rounds[-1].correct_rate if self.rounds else None,
+            'current_difficulty': self.difficulty_progression.current_difficulty.value,
+            'adaptive_difficulty': self.adaptive_difficulty
         }
+
+    def get_current_difficulty(self) -> Difficulty:
+        """Get the current adaptive difficulty level."""
+        return self.difficulty_progression.get_current_difficulty()
+
+    def set_difficulty(self, difficulty: Difficulty) -> None:
+        """
+        Manually set the difficulty level.
+
+        Args:
+            difficulty: New difficulty level to set
+        """
+        self.difficulty_progression.set_difficulty(difficulty)
+        print(f"[SelfPlay] Difficulty manually set to: {difficulty.value}")
+        self._save_state()
+
+    def get_difficulty_progression_stats(self) -> Dict[str, Any]:
+        """Get detailed statistics about difficulty progression."""
+        return self.difficulty_progression.get_progression_stats()
+
+    def run_adaptive_session(
+        self,
+        topics: List[str],
+        n_rounds: int = 5,
+        questions_per_round: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Run multiple self-play rounds with adaptive difficulty.
+
+        This is the main entry point for adaptive training sessions.
+        Difficulty automatically adjusts based on performance.
+
+        Args:
+            topics: Topics to generate questions about
+            n_rounds: Number of rounds to run
+            questions_per_round: Questions per round
+
+        Returns:
+            Session results with progression data
+        """
+        print(f"\n[SelfPlay] Starting adaptive session: {n_rounds} rounds")
+        print(f"[SelfPlay] Initial difficulty: {self.difficulty_progression.current_difficulty.value}")
+
+        session_results = {
+            'rounds': [],
+            'initial_difficulty': self.difficulty_progression.current_difficulty.value,
+            'final_difficulty': None,
+            'difficulty_changes': [],
+            'total_correct': 0,
+            'total_questions': 0
+        }
+
+        for i in range(n_rounds):
+            print(f"\n--- Round {i + 1}/{n_rounds} ---")
+
+            # Run round with adaptive difficulty (no explicit difficulty parameter)
+            round_result = self.run_self_play_round(
+                topics=topics,
+                n_questions=questions_per_round
+            )
+
+            session_results['rounds'].append(round_result)
+            session_results['total_correct'] += round_result['correct_count']
+            session_results['total_questions'] += len(round_result['questions'])
+
+            if round_result.get('difficulty_change'):
+                session_results['difficulty_changes'].append({
+                    'after_round': i + 1,
+                    'change': round_result['difficulty_change']
+                })
+
+        session_results['final_difficulty'] = self.difficulty_progression.current_difficulty.value
+        session_results['overall_correct_rate'] = (
+            session_results['total_correct'] / session_results['total_questions']
+            if session_results['total_questions'] > 0 else 0.0
+        )
+
+        print(f"\n[SelfPlay] Adaptive Session Complete")
+        print(f"[SelfPlay] Overall: {session_results['total_correct']}/{session_results['total_questions']} correct")
+        print(f"[SelfPlay] Final difficulty: {session_results['final_difficulty']}")
+        print(f"[SelfPlay] Difficulty changes: {len(session_results['difficulty_changes'])}")
+
+        return session_results
 
     def get_recent_improvement(self, n_rounds: int = 5) -> float:
         """

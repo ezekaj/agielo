@@ -95,12 +95,13 @@ AI generates questions, answers them, evaluates itself, learns from mistakes.
   - Track metrics: questions_generated, correct_rate, improvement_over_time
   - **Completed 2026-02-03**: Created `integrations/self_play.py` with full `SelfPlayTrainer` class including: `Difficulty` enum (EASY/MEDIUM/HARD), `SelfPlayQuestion`/`SelfPlayAttempt`/`SelfPlayRound` dataclasses, question generation with templates per difficulty, LLM-based answer evaluation against ground truth, learning from mistakes by adding to training_data.jsonl, full self-play round execution with metrics, and persistent state storage. All 29 tests pass in `tests/test_self_play.py`.
 
-- [ ] Add difficulty progression in `integrations/self_play.py`:
+- [x] Add difficulty progression in `integrations/self_play.py`:
   - Start with easy questions (factual recall)
   - Progress to medium (inference, comparison)
   - Then hard (multi-step reasoning, synthesis)
   - Adaptive: increase difficulty when >80% correct, decrease when <50%
   - Store difficulty level in evolution state
+  - **Completed 2026-02-03**: Implemented `DifficultyProgression` class with full adaptive difficulty system. Features include: `record_round_performance()` to track performance history, `should_adjust_difficulty()` to determine when to change difficulty (>80% correct = increase, <50% = decrease), `adjust_difficulty()` to move between EASY→MEDIUM→HARD levels, serialization/deserialization for persistence. Integrated into `SelfPlayTrainer` with `adaptive_difficulty` parameter, automatic difficulty progression during `run_self_play_round()`, manual override via `set_difficulty()`, and new `run_adaptive_session()` for multi-round training. Difficulty state persists in evolution state via `difficulty_progression` key. Added 22 new tests covering `TestDifficultyProgression` (13 tests) and `TestSelfPlayTrainerWithAdaptiveDifficulty` (9 tests). All 51 tests pass.
 
 - [ ] Integrate self-play into autonomous learning in `chat.py`:
   - Import `SelfPlayTrainer` from `self_play.py`
