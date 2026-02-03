@@ -10,7 +10,11 @@ import numpy as np
 import tempfile
 import os
 import shutil
+import sys
 from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class TestSimpleMLPNetwork(unittest.TestCase):
@@ -414,6 +418,93 @@ class TestRNDCuriosityGlobalInstance(unittest.TestCase):
         recorded = record_curiosity(embedding, topic="convenience_test")
         self.assertGreaterEqual(recorded, 0.0)
         self.assertLessEqual(recorded, 1.0)
+
+
+class TestRNDCuriosityNumericalStability(unittest.TestCase):
+    """Test numerical stability of RND curiosity calculations."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+        from integrations.rnd_curiosity import RNDCuriosity
+        self.rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        self.rnd.reset()
+
+    def tearDown(self):
+        """Clean up."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_extreme_mse_values_no_overflow(self):
+        """Test that extreme MSE values don't cause overflow in sigmoid."""
+        # Create embeddings that produce very different outputs
+        # to test the clipping mechanism at line 323
+
+        # Test with embedding that might produce extreme normalized_curiosity
+        embedding = np.ones(64, dtype=np.float32) * 1000  # Large values
+        curiosity = self.rnd.compute_curiosity(embedding)
+
+        # Should return valid score without overflow
+        self.assertFalse(np.isnan(curiosity))
+        self.assertFalse(np.isinf(curiosity))
+        self.assertGreaterEqual(curiosity, 0.0)
+        self.assertLessEqual(curiosity, 1.0)
+
+    def test_very_small_embedding_no_overflow(self):
+        """Test with very small embedding values."""
+        embedding = np.ones(64, dtype=np.float32) * 1e-10
+        curiosity = self.rnd.compute_curiosity(embedding)
+
+        self.assertFalse(np.isnan(curiosity))
+        self.assertFalse(np.isinf(curiosity))
+        self.assertGreaterEqual(curiosity, 0.0)
+        self.assertLessEqual(curiosity, 1.0)
+
+    def test_zero_embedding_no_overflow(self):
+        """Test with zero embedding."""
+        embedding = np.zeros(64, dtype=np.float32)
+        curiosity = self.rnd.compute_curiosity(embedding)
+
+        self.assertFalse(np.isnan(curiosity))
+        self.assertFalse(np.isinf(curiosity))
+        self.assertGreaterEqual(curiosity, 0.0)
+        self.assertLessEqual(curiosity, 1.0)
+
+    def test_mixed_extreme_values(self):
+        """Test with mixed extreme positive and negative values."""
+        embedding = np.zeros(64, dtype=np.float32)
+        embedding[:32] = 1e6
+        embedding[32:] = -1e6
+
+        curiosity = self.rnd.compute_curiosity(embedding)
+
+        self.assertFalse(np.isnan(curiosity))
+        self.assertFalse(np.isinf(curiosity))
+        self.assertGreaterEqual(curiosity, 0.0)
+        self.assertLessEqual(curiosity, 1.0)
+
+    def test_high_curiosity_scale_no_overflow(self):
+        """Test with high curiosity_scale parameter."""
+        from integrations.rnd_curiosity import RNDCuriosity
+
+        # Create with high scale that would cause overflow without clipping
+        rnd_high_scale = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir + "_high",
+            curiosity_scale=1000.0  # Very high scale
+        )
+
+        embedding = np.random.randn(64).astype(np.float32)
+        curiosity = rnd_high_scale.compute_curiosity(embedding)
+
+        self.assertFalse(np.isnan(curiosity))
+        self.assertFalse(np.isinf(curiosity))
+        self.assertGreaterEqual(curiosity, 0.0)
+        self.assertLessEqual(curiosity, 1.0)
 
 
 class TestRNDCuriosityCuriosityMap(unittest.TestCase):

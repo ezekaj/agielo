@@ -19,7 +19,13 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
     - Line 278: `exponent = np.clip(-time_elapsed_hours / stability, -500, 0)`
   - All edge cases tested successfully (extreme values, inf, -inf, nan)
 
-- [ ] Fix `integrations/rnd_curiosity.py:322` - Same overflow issue in curiosity calculation. Add clip bounds to prevent exp overflow. Also check lines 126-128 for proper error handling instead of bare except.
+- [x] Fix `integrations/rnd_curiosity.py:322` - Same overflow issue in curiosity calculation. Add clip bounds to prevent exp overflow. Also check lines 126-128 for proper error handling instead of bare except.
+  - **VERIFIED (2026-02-03)**: All issues already fixed:
+    - Line 323: `sigmoid_input = np.clip(-normalized_curiosity * self.curiosity_scale, -500, 500)` prevents exp overflow
+    - Lines 126-128: No bare except exists here - this is regular reshape code in `forward_with_cache`
+    - All exception handling in file uses specific types: `except ImportError:` (line 476), `except Exception as e:` (lines 635, 670)
+  - Added 5 new numerical stability tests to verify fix handles extreme values (large, small, zero, mixed, high scale)
+  - All 33 tests pass including edge case validation
 
 ### 7A.2 - Replace All Bare Exception Handlers
 - [ ] Fix `integrations/autonomous_worker.py` - Replace all bare `except:` with specific exception handling at lines 495 (URL check), and any other locations. Log errors properly instead of silently ignoring.
