@@ -543,5 +543,205 @@ class TestRNDCuriosityCuriosityMap(unittest.TestCase):
         self.assertLessEqual(curiosity, 1.0)
 
 
+class TestRNDCuriosityCleanup(unittest.TestCase):
+    """Test RNDCuriosity cleanup and atexit functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_cleanup_method_exists(self):
+        """Test that cleanup method exists on RNDCuriosity."""
+        from integrations.rnd_curiosity import RNDCuriosity
+        rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        self.assertTrue(hasattr(rnd, 'cleanup'))
+        self.assertTrue(callable(rnd.cleanup))
+
+    def test_cleanup_saves_state(self):
+        """Test that cleanup saves state to disk."""
+        from integrations.rnd_curiosity import RNDCuriosity
+        rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        rnd.reset()
+
+        # Record some data
+        embedding = np.random.randn(64).astype(np.float32)
+        embedding /= np.linalg.norm(embedding)
+        rnd.record_curiosity(embedding, topic="test_topic")
+        rnd.record_curiosity(embedding, topic="another_topic")
+
+        # Call cleanup
+        rnd.cleanup()
+
+        # Verify state file exists
+        state_file = Path(self.temp_dir) / 'state.json'
+        self.assertTrue(state_file.exists())
+
+        # Load and verify content
+        import json
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+        self.assertIn('predictor_weights', state)
+        self.assertIn('history', state)
+        self.assertGreater(len(state['history']), 0)
+
+    def test_cleanup_saves_correct_data(self):
+        """Test that cleanup saves data that can be reloaded correctly."""
+        from integrations.rnd_curiosity import RNDCuriosity
+
+        # Create and populate first instance
+        rnd1 = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        rnd1.reset()
+
+        # Record some data
+        embedding = np.random.randn(64).astype(np.float32)
+        embedding /= np.linalg.norm(embedding)
+
+        for i in range(10):
+            rnd1.record_curiosity(embedding, topic=f"topic_{i}")
+
+        # Store values before cleanup
+        original_update_count = rnd1.update_count
+        original_running_mean = rnd1.running_mean
+
+        # Call cleanup
+        rnd1.cleanup()
+
+        # Create new instance (should load state)
+        rnd2 = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+
+        # Verify state was restored
+        self.assertEqual(rnd2.update_count, original_update_count)
+        self.assertAlmostEqual(rnd2.running_mean, original_running_mean, places=5)
+
+    def test_cleanup_handles_errors_gracefully(self):
+        """Test that cleanup handles errors without raising exceptions."""
+        from integrations.rnd_curiosity import RNDCuriosity
+
+        rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        rnd.reset()
+
+        # Delete storage directory to simulate error
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+        # Cleanup should not raise, even if save fails
+        try:
+            rnd.cleanup()
+        except Exception as e:
+            self.fail(f"cleanup() raised an exception: {e}")
+
+    def test_instance_registration(self):
+        """Test that instances are registered for cleanup."""
+        from integrations.rnd_curiosity import (
+            RNDCuriosity, _rnd_curiosity_instances
+        )
+
+        initial_count = len(_rnd_curiosity_instances)
+        rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        new_count = len(_rnd_curiosity_instances)
+
+        # Should have registered the new instance
+        self.assertEqual(new_count, initial_count + 1)
+
+        # Last registered should be our instance
+        self.assertIs(_rnd_curiosity_instances[-1](), rnd)
+
+    def test_cleanup_all_instances_function(self):
+        """Test _cleanup_all_instances calls cleanup on all registered instances."""
+        from integrations.rnd_curiosity import (
+            RNDCuriosity, _cleanup_all_instances, _rnd_curiosity_instances
+        )
+
+        # Create instance and add data
+        rnd = RNDCuriosity(
+            input_dim=64,
+            hidden_dim=32,
+            storage_path=self.temp_dir
+        )
+        rnd.reset()
+
+        embedding = np.random.randn(64).astype(np.float32)
+        rnd.record_curiosity(embedding, topic="cleanup_test")
+
+        # Call the cleanup all function
+        _cleanup_all_instances()
+
+        # Verify state was saved
+        state_file = Path(self.temp_dir) / 'state.json'
+        self.assertTrue(state_file.exists())
+
+    def test_cleanup_handles_dead_weakrefs(self):
+        """Test that cleanup handles garbage collected instances gracefully."""
+        import gc
+        from integrations.rnd_curiosity import (
+            _cleanup_all_instances, _rnd_curiosity_instances
+        )
+
+        # Create and immediately delete instances
+        initial_count = len(_rnd_curiosity_instances)
+
+        def create_and_delete():
+            from integrations.rnd_curiosity import RNDCuriosity
+            temp = tempfile.mkdtemp()
+            rnd = RNDCuriosity(
+                input_dim=64,
+                hidden_dim=32,
+                storage_path=temp
+            )
+            shutil.rmtree(temp, ignore_errors=True)
+            # rnd goes out of scope and may be garbage collected
+
+        create_and_delete()
+        gc.collect()
+
+        # This should not raise, even if some weak refs are dead
+        try:
+            _cleanup_all_instances()
+        except Exception as e:
+            self.fail(f"_cleanup_all_instances() raised with dead refs: {e}")
+
+    def test_atexit_registered(self):
+        """Test that cleanup function is registered with atexit."""
+        import atexit
+        from integrations.rnd_curiosity import _cleanup_all_instances
+
+        # atexit doesn't expose a list of registered functions directly,
+        # but we can verify our function exists and is callable
+        self.assertTrue(callable(_cleanup_all_instances))
+
+        # The function should have been registered when the module was imported
+        # We verify the registration mechanism exists by checking the module level
+        import integrations.rnd_curiosity as rnd_module
+        self.assertTrue(hasattr(rnd_module, '_cleanup_all_instances'))
+        self.assertTrue(hasattr(rnd_module, '_rnd_curiosity_instances'))
+
+
 if __name__ == '__main__':
     unittest.main()

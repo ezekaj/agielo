@@ -18,6 +18,8 @@ complementing the active learning system's existing curiosity measures.
 import numpy as np
 import json
 import os
+import atexit
+import weakref
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
@@ -37,6 +39,27 @@ class CuriosityRecord:
     curiosity_score: float
     timestamp: float
     topic: Optional[str] = None
+
+
+# Track instances for atexit cleanup using weak references
+_rnd_curiosity_instances: List[weakref.ref] = []
+
+
+def _cleanup_all_instances():
+    """Cleanup function called at program exit to save all RNDCuriosity state."""
+    for ref in _rnd_curiosity_instances:
+        instance = ref()
+        if instance is not None:
+            instance.cleanup()
+
+
+# Register the cleanup function with atexit
+atexit.register(_cleanup_all_instances)
+
+
+def _register_instance(instance: 'RNDCuriosity'):
+    """Register an RNDCuriosity instance for cleanup on exit."""
+    _rnd_curiosity_instances.append(weakref.ref(instance))
 
 
 class SimpleMLPNetwork:
@@ -274,6 +297,9 @@ class RNDCuriosity:
         # Load saved state if exists
         self._load_state()
 
+        # Register for cleanup on program exit
+        _register_instance(self)
+
     def compute_curiosity(self, embedding: np.ndarray) -> float:
         """
         Compute curiosity score for an embedding.
@@ -319,7 +345,9 @@ class RNDCuriosity:
             normalized_curiosity = (mse - self.running_mean) / std
 
             # Scale to [0, 1] using sigmoid-like function
-            curiosity_score = 1.0 / (1.0 + np.exp(-normalized_curiosity * self.curiosity_scale))
+            # Clip to prevent overflow in exp() - exp(500) overflows, exp(-500) -> 0
+            sigmoid_input = np.clip(-normalized_curiosity * self.curiosity_scale, -500, 500)
+            curiosity_score = 1.0 / (1.0 + np.exp(sigmoid_input))
 
             return float(curiosity_score)
 
@@ -667,6 +695,24 @@ class RNDCuriosity:
 
         except Exception as e:
             print(f"[RNDCuriosity] Load error: {e}")
+
+    def cleanup(self):
+        """
+        Cleanup resources and save state on exit.
+
+        This method is registered with atexit to ensure state is saved
+        when the program terminates. It saves:
+        - Predictor network weights
+        - Running statistics (mean, variance, update count)
+        - Curiosity history
+        """
+        try:
+            with self._lock:
+                self._save_state()
+                print(f"[RNDCuriosity] Cleanup complete: saved {len(self.curiosity_history)} history records, "
+                      f"{self.update_count} updates tracked")
+        except Exception as e:
+            print(f"[RNDCuriosity] Cleanup error: {e}")
 
     def reset(self):
         """Reset the predictor network and statistics (for testing)."""
