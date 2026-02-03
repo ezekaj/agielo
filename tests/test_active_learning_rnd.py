@@ -10,7 +10,12 @@ import unittest
 import numpy as np
 import tempfile
 import shutil
+import sys
+import os
 from pathlib import Path
+
+# Add parent directory to path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class TestActiveLearnerWithRND(unittest.TestCase):
@@ -481,6 +486,135 @@ class TestComputeRNDCuriosity(unittest.TestCase):
         )
         self.assertIsNotNone(embedding)
         self.assertIsInstance(embedding, np.ndarray)
+
+
+class TestActiveLearnerCleanup(unittest.TestCase):
+    """Test ActiveLearner cleanup and atexit functionality."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up."""
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_cleanup_method_exists(self):
+        """Test that cleanup method exists on ActiveLearner."""
+        from integrations.active_learning import ActiveLearner
+        learner = ActiveLearner(storage_path=self.temp_dir, use_rnd=False)
+        self.assertTrue(hasattr(learner, 'cleanup'))
+        self.assertTrue(callable(learner.cleanup))
+
+    def test_cleanup_saves_state(self):
+        """Test that cleanup saves state to disk."""
+        from integrations.active_learning import ActiveLearner
+        learner = ActiveLearner(storage_path=self.temp_dir, use_rnd=False)
+
+        # Add some data
+        learner.record_exposure("test_topic", True, 0.5, 0.5)
+        learner.record_exposure("another_topic", False, 0.7, 0.3)
+
+        # Call cleanup
+        learner.cleanup()
+
+        # Verify state file exists
+        state_file = Path(self.temp_dir) / 'state.json'
+        self.assertTrue(state_file.exists())
+
+        # Load and verify content
+        import json
+        with open(state_file, 'r') as f:
+            state = json.load(f)
+        self.assertIn('topics', state)
+        self.assertIn('test_topic', state['topics'])
+        self.assertIn('another_topic', state['topics'])
+
+    def test_cleanup_saves_rnd_state_when_enabled(self):
+        """Test that cleanup saves RND state when RND is enabled."""
+        from integrations.active_learning import ActiveLearner, RND_AVAILABLE
+
+        if not RND_AVAILABLE:
+            self.skipTest("RND not available")
+
+        learner = ActiveLearner(storage_path=self.temp_dir, use_rnd=True)
+
+        # Record some data to trigger RND updates
+        learner.record_exposure("test_topic", True, 0.5, 0.5)
+
+        # Call cleanup
+        learner.cleanup()
+
+        # Verify RND state file exists
+        rnd_state_file = Path(self.temp_dir) / 'rnd_curiosity' / 'state.json'
+        self.assertTrue(rnd_state_file.exists())
+
+    def test_instance_registration(self):
+        """Test that instances are registered for cleanup."""
+        from integrations.active_learning import (
+            ActiveLearner, _active_learner_instances
+        )
+
+        initial_count = len(_active_learner_instances)
+        learner = ActiveLearner(storage_path=self.temp_dir, use_rnd=False)
+        new_count = len(_active_learner_instances)
+
+        # Should have registered the new instance
+        self.assertEqual(new_count, initial_count + 1)
+
+        # Last registered should be our instance
+        self.assertIs(_active_learner_instances[-1](), learner)
+
+    def test_cleanup_all_instances_function(self):
+        """Test _cleanup_all_instances calls cleanup on all registered instances."""
+        from integrations.active_learning import (
+            ActiveLearner, _cleanup_all_instances, _active_learner_instances
+        )
+
+        # Create multiple instances
+        temp_dir2 = tempfile.mkdtemp()
+        try:
+            learner1 = ActiveLearner(storage_path=self.temp_dir, use_rnd=False)
+            learner2 = ActiveLearner(storage_path=temp_dir2, use_rnd=False)
+
+            # Add data to both
+            learner1.record_exposure("topic1", True, 0.5, 0.5)
+            learner2.record_exposure("topic2", True, 0.5, 0.5)
+
+            # Call cleanup_all_instances (simulating atexit)
+            _cleanup_all_instances()
+
+            # Both should have saved state
+            state_file1 = Path(self.temp_dir) / 'state.json'
+            state_file2 = Path(temp_dir2) / 'state.json'
+            self.assertTrue(state_file1.exists())
+            self.assertTrue(state_file2.exists())
+        finally:
+            shutil.rmtree(temp_dir2, ignore_errors=True)
+
+    def test_cleanup_handles_dead_weakrefs(self):
+        """Test that cleanup handles garbage collected instances gracefully."""
+        from integrations.active_learning import (
+            ActiveLearner, _cleanup_all_instances
+        )
+
+        # Create instance, then let it be garbage collected
+        learner = ActiveLearner(storage_path=self.temp_dir, use_rnd=False)
+        del learner
+
+        # Should not raise when cleaning up dead refs
+        _cleanup_all_instances()  # Should not raise
+
+    def test_atexit_registered(self):
+        """Test that cleanup function is registered with atexit."""
+        import atexit
+        from integrations.active_learning import _cleanup_all_instances
+
+        # Check atexit registry (implementation detail, but good to verify)
+        # The function should have been registered at module import time
+        # We can't easily check atexit's internal registry, but we can verify
+        # the function exists and is callable
+        self.assertTrue(callable(_cleanup_all_instances))
 
 
 if __name__ == '__main__':

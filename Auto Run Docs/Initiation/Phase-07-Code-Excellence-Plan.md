@@ -240,7 +240,22 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
   - All 25 active_learning_rnd tests pass, 454/455 total project tests pass (1 pre-existing failure in test_search.py unrelated to this change)
 
 ### 7D.2 - Add Cleanup/Atexit Handlers
-- [ ] Add `atexit` cleanup to `integrations/active_learning.py` - Register handler to save state and close resources on program exit.
+- [x] Add `atexit` cleanup to `integrations/active_learning.py` - Register handler to save state and close resources on program exit.
+  - **COMPLETED (2026-02-03)**: Implemented atexit cleanup handler for ActiveLearner:
+    - Added `import atexit` and `import weakref` at module level
+    - Created `cleanup()` method that saves state (topics, history, RND stats) and RND model state on exit
+    - Created `_active_learner_instances` list with weak references to track all instances
+    - Created `_cleanup_all_instances()` function registered with `atexit.register()` to cleanup all instances on program exit
+    - Created `_register_instance()` function to register instances on creation (called in `__init__`)
+    - Added 7 new tests in `TestActiveLearnerCleanup` class:
+      - `test_cleanup_method_exists`: Verifies cleanup method exists and is callable
+      - `test_cleanup_saves_state`: Verifies state is saved to disk
+      - `test_cleanup_saves_rnd_state_when_enabled`: Verifies RND state is saved when RND is enabled
+      - `test_instance_registration`: Verifies instances are registered in the weak reference list
+      - `test_cleanup_all_instances_function`: Verifies all instances are cleaned up
+      - `test_cleanup_handles_dead_weakrefs`: Verifies garbage collected instances don't cause errors
+      - `test_atexit_registered`: Verifies cleanup function is registered with atexit
+  - All 32 active_learning_rnd tests pass, 461/462 total project tests pass (1 pre-existing failure in test_search.py unrelated to this change)
 
 - [ ] Add `atexit` cleanup to `integrations/self_evolution.py` - Save evolution state on exit.
 

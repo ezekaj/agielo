@@ -19,6 +19,8 @@ import numpy as np
 import json
 import os
 import time
+import atexit
+import weakref
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass, field
@@ -95,6 +97,27 @@ class LearningEvent:
     is_novel: bool = False  # Whether this was a novel topic discovery
 
 
+# Track instances for atexit cleanup using weak references
+_active_learner_instances: List[weakref.ref] = []
+
+
+def _cleanup_all_instances():
+    """Cleanup function called at program exit to save all ActiveLearner state."""
+    for ref in _active_learner_instances:
+        instance = ref()
+        if instance is not None:
+            instance.cleanup()
+
+
+# Register the cleanup function with atexit
+atexit.register(_cleanup_all_instances)
+
+
+def _register_instance(instance: 'ActiveLearner'):
+    """Register an ActiveLearner instance for cleanup on exit."""
+    _active_learner_instances.append(weakref.ref(instance))
+
+
 class ActiveLearner:
     """
     Active learning system that prioritizes what to learn.
@@ -156,6 +179,9 @@ class ActiveLearner:
 
         # Thread lock
         self._lock = threading.Lock()
+
+        # Register for cleanup on program exit
+        _register_instance(self)
 
     def should_learn(self, topic: str, content: str = "") -> Tuple[bool, float, str]:
         """
@@ -725,6 +751,33 @@ class ActiveLearner:
 
         except Exception as e:
             print(f"[ActiveLearner] Load error: {e}")
+
+    def cleanup(self):
+        """
+        Cleanup resources and save state on exit.
+
+        This method is registered with atexit to ensure state is saved
+        when the program terminates. It saves:
+        - Topic knowledge base
+        - Learning history
+        - RND statistics
+        - RND model state (if RND is enabled)
+        """
+        try:
+            with self._lock:
+                # Save active learner state
+                self._save_state()
+
+                # Save RND curiosity state if enabled
+                if self.use_rnd and self.rnd_curiosity is not None:
+                    try:
+                        self.rnd_curiosity._save_state()
+                    except Exception as e:
+                        print(f"[ActiveLearner] RND cleanup error: {e}")
+
+                print(f"[ActiveLearner] Cleanup complete: saved {len(self.topics)} topics, {len(self.history)} events")
+        except Exception as e:
+            print(f"[ActiveLearner] Cleanup error: {e}")
 
 
 class CurriculumLearner:
