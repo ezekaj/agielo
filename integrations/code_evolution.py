@@ -55,6 +55,21 @@ except ImportError:
     CodeMutator = None
     MutationType = None
 
+# Import ensemble verifier for multi-verifier code validation
+try:
+    from integrations.ensemble_verifier import (
+        EnsembleVerifier, EnsembleResult, VerificationResult as EnsembleVerificationResult,
+        VotingStrategy, create_ensemble_verifier
+    )
+    ENSEMBLE_VERIFIER_AVAILABLE = True
+except ImportError:
+    ENSEMBLE_VERIFIER_AVAILABLE = False
+    EnsembleVerifier = None
+    EnsembleResult = None
+    EnsembleVerificationResult = None
+    VotingStrategy = None
+    create_ensemble_verifier = None
+
 
 class CodeChangeType(Enum):
     """Types of code modifications."""
@@ -91,6 +106,7 @@ class CodeChange:
     test_results: Optional[Dict] = None
     deployed: bool = False
     rolled_back: bool = False
+    verification_results: Optional[Dict] = None  # Ensemble verifier results
 
 
 class CodeValidator:
@@ -814,16 +830,55 @@ class CodeEvolution:
     - Population-based evolution (genetic algorithm style)
     """
 
-    def __init__(self, storage_dir: Path = None, use_docker: bool = True, use_population: bool = False):
+    def __init__(
+        self,
+        storage_dir: Path = None,
+        use_docker: bool = True,
+        use_population: bool = False,
+        verifier_config: Optional[Dict[str, Any]] = None
+    ):
         self.storage_dir = storage_dir or EVOLUTION_DIR / "code_evolution"
         self.storage_dir.mkdir(parents=True, exist_ok=True)
         self.use_docker = use_docker
         self.use_population = use_population and POPULATION_AVAILABLE
+        self.verifier_config = verifier_config
 
+        # Legacy validator (kept for backward compatibility)
         self.validator = CodeValidator(use_docker=use_docker)
         self.sandbox = CodeSandbox(self.storage_dir / "sandbox", use_docker=use_docker)
         self.version_control = CodeVersionControl(self.storage_dir / "versions")
         self.introspector = CodeIntrospector()  # For reading own source code
+
+        # Ensemble verifier system (replaces single CodeValidator when available)
+        self.ensemble_verifier: Optional['EnsembleVerifier'] = None
+        self.use_ensemble = ENSEMBLE_VERIFIER_AVAILABLE
+        if self.use_ensemble:
+            # Build default config if not provided
+            config = verifier_config or {}
+            # Default configuration: syntax (required), safety (veto), test (required), llm (optional)
+            if 'syntax' not in config:
+                config['syntax'] = {'enabled': True, 'weight': 1.0}
+            if 'safety' not in config:
+                config['safety'] = {'enabled': True, 'weight': 1.0}  # Has veto power
+            if 'test' not in config:
+                config['test'] = {'enabled': True, 'weight': 1.0}
+            if 'llm' not in config:
+                config['llm'] = {'enabled': True, 'weight': 0.7}  # Optional
+            if 'type' not in config:
+                config['type'] = {'enabled': True, 'weight': 0.8}  # Optional
+            if 'style' not in config:
+                config['style'] = {'enabled': True, 'weight': 0.5}  # Optional
+            if 'docker_mode' not in config:
+                config['docker_mode'] = use_docker and DOCKER_AVAILABLE
+
+            self.ensemble_verifier = create_ensemble_verifier(
+                config=config,
+                sandbox=self.sandbox,
+                llm_interface=None  # Can be set later via set_llm_interface()
+            )
+            print("[CodeEvolution] Ensemble verifier: ENABLED")
+        else:
+            print("[CodeEvolution] Ensemble verifier not available, using single CodeValidator")
 
         # Population-based evolution system
         self.population: Optional['Population'] = None
@@ -946,7 +1001,7 @@ class CodeEvolution:
 
         # Standard single-variant proposal
         return self._propose_change_single(
-            change_type, new_code, description, target_file, original_code
+            change_type, new_code, description, target_file, original_code, test_cases
         )
 
     def _propose_change_single(
@@ -955,7 +1010,8 @@ class CodeEvolution:
         new_code: str,
         description: str,
         target_file: str = None,
-        original_code: str = None
+        original_code: str = None,
+        test_cases: List[Dict] = None
     ) -> CodeChange:
         """Standard single-variant change proposal."""
         # Generate change ID
@@ -974,22 +1030,72 @@ class CodeEvolution:
             timestamp=datetime.now().isoformat()
         )
 
-        # Validate code
-        result, message = self.validator.validate(new_code)
-        change.validation_result = result
+        # Use ensemble verifier if available, otherwise fall back to single validator
+        if self.use_ensemble and self.ensemble_verifier:
+            ensemble_result = self.ensemble_verifier.verify(new_code, test_cases=test_cases or [])
 
-        if result == ValidationResult.VALID:
-            # Test in sandbox
-            success, test_results = self.sandbox.test_code(new_code)
-            change.test_results = test_results
+            # Store full verification results
+            change.verification_results = ensemble_result.to_dict()
 
-            if success:
-                self.pending_changes.append(change)
-                print(f"[CodeEvolution] Change {change_id} validated and ready for deployment")
+            # Map ensemble result to ValidationResult for backward compatibility
+            if ensemble_result.vetoed:
+                change.validation_result = ValidationResult.DANGEROUS_CODE
+                print(f"[CodeEvolution] Change {change_id} vetoed by {ensemble_result.vetoed_by}")
+            elif not ensemble_result.passed:
+                # Determine failure type from individual verifier results
+                for r in ensemble_result.results:
+                    if not r.passed:
+                        if r.verifier_name == "SyntaxVerifier":
+                            change.validation_result = ValidationResult.SYNTAX_ERROR
+                            break
+                        elif r.verifier_name == "SafetyVerifier":
+                            change.validation_result = ValidationResult.DANGEROUS_CODE
+                            break
+                        elif r.verifier_name == "TestVerifier":
+                            change.validation_result = ValidationResult.TEST_FAILED
+                            break
+                else:
+                    # Generic failure
+                    change.validation_result = ValidationResult.TEST_FAILED
+                print(f"[CodeEvolution] Change {change_id} failed ensemble verification (confidence: {ensemble_result.final_confidence:.2f})")
             else:
-                print(f"[CodeEvolution] Change {change_id} failed sandbox testing: {test_results['errors']}")
+                change.validation_result = ValidationResult.VALID
+                # Extract test results from TestVerifier
+                for r in ensemble_result.results:
+                    if r.verifier_name == "TestVerifier" and r.details:
+                        change.test_results = {
+                            'success': r.passed,
+                            'tests_passed': r.details.get('tests_passed', 0),
+                            'tests_failed': r.details.get('tests_failed', 0),
+                            'errors': r.details.get('errors', []),
+                            'ensemble_confidence': ensemble_result.final_confidence
+                        }
+                        break
+                else:
+                    change.test_results = {
+                        'success': True,
+                        'ensemble_confidence': ensemble_result.final_confidence
+                    }
+
+                self.pending_changes.append(change)
+                print(f"[CodeEvolution] Change {change_id} passed ensemble verification (confidence: {ensemble_result.final_confidence:.2f})")
         else:
-            print(f"[CodeEvolution] Change {change_id} validation failed: {message}")
+            # Fall back to legacy single validator
+            result, message = self.validator.validate(new_code)
+            change.validation_result = result
+
+            if result == ValidationResult.VALID:
+                # Test in sandbox
+                success, test_results = self.sandbox.test_code(new_code, test_cases)
+                change.test_results = test_results
+
+                if success:
+                    self.pending_changes.append(change)
+                    print(f"[CodeEvolution] Change {change_id} validated and ready for deployment")
+                else:
+                    print(f"[CodeEvolution] Change {change_id} failed sandbox testing: {test_results['errors']}")
+            else:
+                print(f"[CodeEvolution] Change {change_id} validation failed: {message}")
 
         return change
 
@@ -1012,10 +1118,25 @@ class CodeEvolution:
 
         print(f"[CodeEvolution] Using population-based evolution for change proposal")
 
-        # Step 1: Validate original code first
-        result, message = self.validator.validate(new_code)
-        if result != ValidationResult.VALID:
-            print(f"[CodeEvolution] Original code validation failed: {message}")
+        # Step 1: Validate original code first (use ensemble if available)
+        validation_passed = False
+        validation_result = ValidationResult.VALID
+        ensemble_verification = None
+
+        if self.use_ensemble and self.ensemble_verifier:
+            ensemble_verification = self.ensemble_verifier.verify(new_code, test_cases=test_cases or [])
+            validation_passed = ensemble_verification.passed and not ensemble_verification.vetoed
+            if ensemble_verification.vetoed:
+                validation_result = ValidationResult.DANGEROUS_CODE
+            elif not ensemble_verification.passed:
+                validation_result = ValidationResult.TEST_FAILED
+        else:
+            result, message = self.validator.validate(new_code)
+            validation_passed = (result == ValidationResult.VALID)
+            validation_result = result
+
+        if not validation_passed:
+            print(f"[CodeEvolution] Original code validation failed")
             # Return a failed change
             change_id = hashlib.md5(f"{new_code}{datetime.now().isoformat()}".encode()).hexdigest()[:12]
             change = CodeChange(
@@ -1026,7 +1147,8 @@ class CodeEvolution:
                 new_code=new_code,
                 description=description,
                 timestamp=datetime.now().isoformat(),
-                validation_result=result
+                validation_result=validation_result,
+                verification_results=ensemble_verification.to_dict() if ensemble_verification else None
             )
             return change
 
@@ -1045,9 +1167,16 @@ class CodeEvolution:
             mutation_type = random.choice(list(MutationType))
             mutated_code, mutation_desc = self.mutator.mutate(new_code, mutation_type)
 
-            # Validate mutated code
-            mut_result, _ = self.validator.validate(mutated_code)
-            if mut_result == ValidationResult.VALID and mutated_code != new_code:
+            # Validate mutated code (use ensemble if available)
+            variant_valid = False
+            if self.use_ensemble and self.ensemble_verifier:
+                mut_ensemble_result = self.ensemble_verifier.verify(mutated_code, test_cases=test_cases or [])
+                variant_valid = mut_ensemble_result.passed and not mut_ensemble_result.vetoed
+            else:
+                mut_result, _ = self.validator.validate(mutated_code)
+                variant_valid = (mut_result == ValidationResult.VALID)
+
+            if variant_valid and mutated_code != new_code:
                 variant = self.population.add_individual(
                     mutated_code,
                     fitness=0.0,
@@ -1088,6 +1217,11 @@ class CodeEvolution:
         lineage = self.population.get_lineage(best_variant.id)
 
         # Step 6: Create CodeChange from best variant
+        # Run final ensemble verification on best variant
+        final_verification = None
+        if self.use_ensemble and self.ensemble_verifier:
+            final_verification = self.ensemble_verifier.verify(best_variant.code, test_cases=test_cases or [])
+
         change_id = best_variant.id
         change = CodeChange(
             id=change_id,
@@ -1098,7 +1232,8 @@ class CodeEvolution:
             description=f"{description} (population-evolved, {len(best_variant.mutations)} mutations)",
             timestamp=datetime.now().isoformat(),
             validation_result=ValidationResult.VALID,
-            test_results=best_variant.test_results
+            test_results=best_variant.test_results,
+            verification_results=final_verification.to_dict() if final_verification else None
         )
 
         # Add population metadata to test_results
@@ -1110,6 +1245,8 @@ class CodeEvolution:
                 'lineage': lineage,
                 'parent_id': best_variant.parent_id
             }
+            if final_verification:
+                change.test_results['ensemble_confidence'] = final_verification.final_confidence
 
         if best_variant.fitness_score > 0 or (not test_cases and best_variant.test_results.get('success')):
             self.pending_changes.append(change)
@@ -1307,7 +1444,8 @@ class CodeEvolution:
             'rollbacks': sum(1 for c in self.version_control.history if c.get('rolled_back')),
             'active_functions': len(self.get_active_functions()),
             'last_change': self.deployed_changes[-1].timestamp if self.deployed_changes else None,
-            'population_enabled': self.use_population
+            'population_enabled': self.use_population,
+            'ensemble_verifier_enabled': self.use_ensemble
         }
 
         # Add population stats if enabled
@@ -1315,7 +1453,75 @@ class CodeEvolution:
             pop_stats = self.get_population_stats()
             stats['population'] = pop_stats
 
+        # Add ensemble verifier stats if enabled
+        if self.use_ensemble and self.ensemble_verifier:
+            verifier_stats = self.get_verifier_stats()
+            stats['verifier'] = verifier_stats
+
         return stats
+
+    def get_verifier_stats(self) -> Dict:
+        """
+        Get statistics for ensemble verifier performance.
+
+        Returns:
+            Dict with verifier statistics including:
+            - total_verifications: Total number of verifications performed
+            - pass_rate: Percentage of verifications that passed
+            - veto_count: Number of times safety veto was used
+            - avg_confidence: Average confidence across all verifications
+            - per_verifier: Stats for each individual verifier
+            - issues_caught: Which verifiers caught issues
+        """
+        if not self.use_ensemble or not self.ensemble_verifier:
+            return {
+                'enabled': False,
+                'message': 'Ensemble verifier not enabled'
+            }
+
+        # Get base stats from ensemble
+        ensemble_stats = self.ensemble_verifier.get_stats()
+
+        # Get effectiveness metrics
+        effectiveness = self.ensemble_verifier.get_verifier_effectiveness()
+
+        # Calculate issues caught by each verifier
+        issues_caught = {}
+        for verifier_name, eff_stats in effectiveness.items():
+            issues_caught[verifier_name] = {
+                'total_failures': eff_stats.get('total_failures', 0),
+                'sole_failures': eff_stats.get('sole_failures', 0),  # Caught issue others missed
+                'vetoes': eff_stats.get('vetoes', 0),
+                'effectiveness_score': (
+                    eff_stats.get('sole_failures', 0) / max(eff_stats.get('total_failures', 1), 1)
+                    if eff_stats.get('total_failures', 0) > 0 else 0.0
+                )
+            }
+
+        return {
+            'enabled': True,
+            'total_verifications': ensemble_stats.get('total_verifications', 0),
+            'pass_rate': round(ensemble_stats.get('pass_rate', 0.0), 4),
+            'avg_confidence': round(ensemble_stats.get('avg_confidence', 0.0), 4),
+            'veto_count': ensemble_stats.get('veto_count', 0),
+            'voting_strategy': ensemble_stats.get('voting_strategy', 'weighted'),
+            'threshold': ensemble_stats.get('threshold', 0.7),
+            'per_verifier': ensemble_stats.get('verifier_stats', {}),
+            'issues_caught': issues_caught
+        }
+
+    def set_llm_interface(self, llm_interface: Callable) -> None:
+        """
+        Set the LLM interface for the LLMVerifier in the ensemble.
+
+        Args:
+            llm_interface: Callable that takes a prompt and returns a response
+        """
+        if self.use_ensemble and self.ensemble_verifier:
+            llm_verifier = self.ensemble_verifier.get_verifier("LLMVerifier")
+            if llm_verifier:
+                llm_verifier.llm_interface = llm_interface
+                print("[CodeEvolution] LLM interface set for LLMVerifier")
 
     def get_population_stats(self) -> Dict:
         """

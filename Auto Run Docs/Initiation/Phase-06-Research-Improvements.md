@@ -136,12 +136,13 @@ Multiple verification methods that must agree before deploying code changes.
   - Log all verifier votes and final decision
   - **Completed 2026-02-03**: Already implemented in previous task. `EnsembleVerifier` class (lines 854-1091) includes: `VotingStrategy` enum (UNANIMOUS/MAJORITY/WEIGHTED), `_apply_voting()` method for weighted average calculation with configurable threshold (default 0.7), veto power logic checking `has_veto` flag on verifiers (SafetyVerifier has veto=True), `verification_history` list and `get_stats()`/`get_verifier_effectiveness()` methods for logging all votes. Factory function `create_ensemble_verifier()` supports full config. All 41 tests pass including specific tests for unanimous/majority/weighted voting, veto behavior, stats collection.
 
-- [ ] Integrate ensemble into code evolution in `integrations/code_evolution.py`:
+- [x] Integrate ensemble into code evolution in `integrations/code_evolution.py`:
   - Replace single `CodeValidator` with `EnsembleVerifier`
   - Add `verifier_config` parameter to `CodeEvolution.__init__()`
   - Default config: syntax (required), safety (veto), test (required), llm (optional)
   - Store verification results in `CodeChange.verification_results`
   - Add stats: which verifiers caught issues, false positive/negative rates
+  - **Completed 2026-02-03**: Fully integrated EnsembleVerifier into CodeEvolution. Added `verifier_config` parameter to `__init__()`, implemented ensemble verification with fallback to legacy CodeValidator, added `verification_results` field to CodeChange dataclass, implemented `get_verifier_stats()` for tracking which verifiers caught issues (total_failures, sole_failures, vetoes, effectiveness_score), added `set_llm_interface()` method for LLMVerifier configuration. Updated both `_propose_change_single()` and `_propose_change_with_population()` to use ensemble. Added 8 new tests in `TestEnsembleIntegration` class. All 24 code_evolution tests and 41 ensemble_verifier tests pass.
 
 ---
 
