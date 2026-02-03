@@ -293,7 +293,28 @@ A multi-phase plan to fix all bugs, improve performance, enhance code quality, a
       - `test_atexit_registered`: Verifies cleanup function is registered with atexit
   - All 41 rnd_curiosity tests pass
 
-- [ ] Add `atexit` cleanup to `integrations/autonomous_worker.py` - Stop worker thread and save stats on exit.
+- [x] Add `atexit` cleanup to `integrations/autonomous_worker.py` - Stop worker thread and save stats on exit.
+  - **COMPLETED (2026-02-03)**: Implemented atexit cleanup handler for AutonomousWorker:
+    - Added `import atexit` and `import weakref` at module level
+    - Created `cleanup()` method that stops the worker thread if running, saves statistics to disk, and saves goal engine state
+    - Created `_autonomous_worker_instances` list with weak references to track all instances
+    - Created `_cleanup_all_instances()` function registered with `atexit.register()` to cleanup all instances on program exit
+    - Created `_register_instance()` function to register instances on creation (called in `__init__`)
+    - Added 19 new tests in `tests/test_autonomous_worker.py`:
+      - `TestAutonomousWorkerCleanup`: 11 tests for cleanup functionality
+        - `test_cleanup_method_exists`: Verifies cleanup method exists and is callable
+        - `test_cleanup_saves_stats`: Verifies stats are saved to disk
+        - `test_cleanup_saves_correct_data`: Verifies persisted data can be reloaded
+        - `test_cleanup_saves_goals`: Verifies goal engine state is saved
+        - `test_cleanup_handles_errors_gracefully`: Verifies errors don't raise exceptions
+        - `test_cleanup_stops_running_worker`: Verifies running worker thread is stopped
+        - `test_cleanup_handles_stopped_worker`: Verifies stopped workers don't cause errors
+        - `test_instance_registration`: Verifies instances are registered in the weak reference list
+        - `test_cleanup_all_instances_function`: Verifies all instances are cleaned up
+        - `test_cleanup_handles_dead_weakrefs`: Verifies garbage collected instances don't cause errors
+        - `test_atexit_registered`: Verifies cleanup function is registered with atexit
+      - `TestAutonomousWorkerBasics`: 8 tests for basic functionality
+  - All 19 autonomous worker tests pass
 
 - [ ] Add `atexit` cleanup to `neuro_memory/memory/episodic_store.py` - Stop background forgetting thread and save state on exit.
 
