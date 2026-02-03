@@ -1,0 +1,30 @@
+# Dockerfile.sandbox
+# Minimal Python environment for safe code execution
+# Used by DockerSandbox for isolated code testing
+
+FROM python:3.11-slim
+
+# Set labels
+LABEL maintainer="cognitive-ai"
+LABEL description="Minimal sandbox for safe code execution"
+LABEL version="1.0"
+
+# Create non-root user for additional security
+RUN useradd -m -s /bin/bash sandbox
+
+# Install only essential packages
+RUN pip install --no-cache-dir \
+    numpy>=1.24.0 \
+    typing-extensions>=4.0.0
+
+# Create sandbox directory
+RUN mkdir -p /sandbox && chown sandbox:sandbox /sandbox
+
+# Switch to non-root user
+USER sandbox
+
+# Set working directory
+WORKDIR /sandbox
+
+# Default command (will be overridden)
+CMD ["python", "--version"]
