@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from collections import deque
 import torch
 import torch.nn as nn
-from scipy.stats import entropy
 
 # Import constants from config
 from config.constants import (

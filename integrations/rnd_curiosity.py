@@ -22,7 +22,7 @@ import atexit
 import weakref
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 import threading
 

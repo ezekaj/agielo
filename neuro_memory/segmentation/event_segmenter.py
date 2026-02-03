@@ -18,11 +18,9 @@ Key Algorithms:
 """
 
 import numpy as np
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Dict
 from dataclasses import dataclass
-from collections import deque
 import networkx as nx
-from scipy.stats import norm
 from sklearn.cluster import AgglomerativeClustering
 
 

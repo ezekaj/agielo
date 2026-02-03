@@ -1,9 +1,9 @@
 """
-Cognitive Ollama - LLM with Human-like Memory
-==============================================
+Cognitive LLM - LLM with Human-like Memory
+==========================================
 
 Combines:
-- Ollama (local LLM)
+- LM Studio (local LLM via OpenAI-compatible API)
 - Human-Cognition-AI (dual-process, emotions, goals)
 - Neuro-Memory (bio-inspired episodic memory)
 
@@ -21,11 +21,18 @@ import hashlib
 import sys
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.cognitive_agent import CognitiveAgent, CognitiveConfig
+from config.constants import (
+    MAX_SYSTEM_PROMPT_CHARS,
+    MAX_USER_INPUT_CHARS,
+    MAX_CONTEXT_CHARS,
+    MAX_RESPONSE_CHARS,
+)
+import re
 
 # Try to import neuro-memory
 try:
@@ -34,28 +41,42 @@ except ImportError:
     NEURO_MEMORY_AVAILABLE = False
     NeuroMemorySystem = None
 
+# Default system prompt to guide model behavior
+DEFAULT_SYSTEM_PROMPT = """You are a helpful AI assistant. Be concise and direct in your responses.
 
-class CognitiveOllama:
+IMPORTANT RULES:
+- Do NOT output <think> tags or internal reasoning
+- Do NOT show step-by-step thought processes
+- Give direct, actionable answers
+- Keep responses focused and under 500 words unless more detail is requested
+"""
+
+
+class CognitiveLLM:
     """
-    Ollama LLM enhanced with human-like cognition and bio-inspired memory.
+    LLM enhanced with human-like cognition and bio-inspired memory.
+    Supports LM Studio (OpenAI-compatible API) and Ollama.
     """
 
     def __init__(
         self,
-        model: str = "ministral-3:8b",
-        ollama_url: str = "http://localhost:11434/api/chat",
+        model: str = "zai-org/glm-4.7-flash",
+        api_url: str = "http://localhost:1234/v1/chat/completions",
+        backend: str = "lmstudio",  # "lmstudio" or "ollama"
         memory_path: str = None
     ):
         """
-        Initialize cognitive Ollama.
+        Initialize cognitive LLM.
 
         Args:
-            model: Ollama model name
-            ollama_url: Ollama API URL
+            model: Model name
+            api_url: API URL (LM Studio or Ollama)
+            backend: "lmstudio" or "ollama"
             memory_path: Where to persist memories
         """
         self.model = model
-        self.ollama_url = ollama_url
+        self.api_url = api_url
+        self.backend = backend
         self.dim = 128  # Embedding dimension
 
         # Initialize cognitive agent (emotions, dual-process, etc.)
@@ -92,6 +113,33 @@ class CognitiveOllama:
         emb = (emb / 127.5) - 1.0
         return emb
 
+    def _clean_response(self, response: str) -> str:
+        """Clean model response by removing <think> blocks and artifacts."""
+        if not response:
+            return response
+
+        # Remove <think>...</think> blocks (keep content after)
+        cleaned = re.sub(r'<think>.*?</think>\s*', '', response, flags=re.DOTALL)
+
+        # If response was mostly thinking, try to extract content after </think>
+        if not cleaned.strip() and '</think>' in response:
+            parts = response.split('</think>')
+            if len(parts) > 1:
+                cleaned = parts[-1].strip()
+
+        # Remove other common artifacts
+        cleaned = re.sub(r'\[System\].*?\n', '', cleaned)
+        cleaned = re.sub(r'\[Internal\].*?\n', '', cleaned)
+
+        # Clean up excessive newlines
+        cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+
+        # Truncate if too long
+        if len(cleaned) > MAX_RESPONSE_CHARS:
+            cleaned = cleaned[:MAX_RESPONSE_CHARS] + "..."
+
+        return cleaned.strip() or response.strip()
+
     def _get_cognitive_context(self, user_input: str) -> Dict[str, Any]:
         """Process input through cognitive system."""
         emb = self._text_to_embedding(user_input)
@@ -100,25 +148,37 @@ class CognitiveOllama:
         perception = self.cognition.perceive(emb)
         thought = self.cognition.think(emb, {'source': 'user'})
 
-        # Memory processing
+        # Memory processing (with error handling for numpy issues)
         memory_info = {}
         if self.memory and self.memory.enabled:
-            # Process through neuro-memory
-            mem_result = self.memory.process_observation(
-                emb,
-                content=user_input,
-                location="chat"
-            )
-            memory_info = {
-                'surprise': mem_result['surprise'],
-                'is_novel': mem_result['is_novel'],
-                'stored': mem_result['stored']
-            }
+            try:
+                # Process through neuro-memory
+                mem_result = self.memory.process_observation(
+                    emb,
+                    content=user_input,
+                    location="chat"
+                )
+                memory_info = {
+                    'surprise': float(mem_result.get('surprise', 0)),
+                    'is_novel': bool(mem_result.get('is_novel', False)),
+                    'stored': bool(mem_result.get('stored', False))
+                }
 
-            # Recall relevant memories
-            recalled = self.memory.recall(emb, k=3)
-            if recalled:
-                memory_info['recalled'] = [m['content'] for m in recalled if m['content']]
+                # Recall relevant memories
+                recalled = self.memory.recall(emb, k=3)
+                # Handle potential numpy array in recalled (defensive check)
+                if recalled is not None and (isinstance(recalled, list) and len(recalled) > 0):
+                    contents = []
+                    for m in recalled:
+                        c = m.get('content') if isinstance(m, dict) else None
+                        if c is not None:
+                            if isinstance(c, np.ndarray):
+                                c = str(c) if c.size > 0 else None
+                            if c:
+                                contents.append(str(c))
+                    memory_info['recalled'] = contents
+            except Exception:
+                pass  # Ignore memory errors, continue with chat
 
         return {
             'confidence': thought['dual_process']['confidence'],
@@ -154,8 +214,12 @@ class CognitiveOllama:
         if context.get('memory', {}).get('recalled'):
             cognitive_context += f"- Related memories: {len(context['memory']['recalled'])}\n"
 
-        # Call Ollama
-        response = self._call_ollama(user_input, system_prompt, cognitive_context)
+        # Call LLM (use default system prompt if none provided)
+        effective_system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
+        response = self._call_llm(user_input, effective_system_prompt, cognitive_context)
+
+        # Clean response (remove <think> blocks, artifacts, truncate)
+        response = self._clean_response(response)
 
         # Store in history
         self.history.append({
@@ -175,20 +239,75 @@ class CognitiveOllama:
 
         return response
 
-    def _call_ollama(self, user_input: str, system_prompt: str, cognitive_context: str) -> str:
-        """Call Ollama API."""
+    def _truncate_context(self, system_prompt: str, cognitive_context: str, user_input: str) -> tuple:
+        """Truncate inputs to stay within context limits (~50k tokens).
+
+        Returns:
+            tuple: (system_content, user_content) truncated to fit limits
+        """
+        system_content = ((system_prompt or "") + cognitive_context)[:MAX_SYSTEM_PROMPT_CHARS]
+        user_content = user_input[:MAX_USER_INPUT_CHARS]
+
+        # Final safety check on total context
+        total_chars = len(system_content) + len(user_content)
+        if total_chars > MAX_CONTEXT_CHARS:
+            # Prioritize user input, truncate system prompt more
+            excess = total_chars - MAX_CONTEXT_CHARS
+            system_content = system_content[:-excess] if len(system_content) > excess else ""
+
+        return system_content, user_content
+
+    def _call_llm(self, user_input: str, system_prompt: str, cognitive_context: str) -> str:
+        """Call LLM API (LM Studio or Ollama)."""
+        if self.backend == "lmstudio":
+            return self._call_lmstudio(user_input, system_prompt, cognitive_context)
+        else:
+            return self._call_ollama(user_input, system_prompt, cognitive_context)
+
+    def _call_lmstudio(self, user_input: str, system_prompt: str, cognitive_context: str) -> str:
+        """Call LM Studio OpenAI-compatible API."""
+        system_content, user_content = self._truncate_context(system_prompt, cognitive_context, user_input)
+
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": (system_prompt or "") + cognitive_context},
-                {"role": "user", "content": user_input}
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
+            ],
+            "max_tokens": 2048,
+            "temperature": 0.7
+        }
+
+        try:
+            req = urllib.request.Request(
+                self.api_url,
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json'}
+            )
+            with urllib.request.urlopen(req, timeout=300) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                return result["choices"][0]["message"]["content"]
+        except urllib.error.URLError as e:
+            return f"[LM Studio not running. Start LM Studio and load a model.]"
+        except Exception as e:
+            return f"[Error calling LM Studio: {e}]"
+
+    def _call_ollama(self, user_input: str, system_prompt: str, cognitive_context: str) -> str:
+        """Call Ollama API."""
+        system_content, user_content = self._truncate_context(system_prompt, cognitive_context, user_input)
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
             ],
             "stream": False
         }
 
         try:
             req = urllib.request.Request(
-                self.ollama_url,
+                self.api_url,
                 data=json.dumps(payload).encode('utf-8'),
                 headers={'Content-Type': 'application/json'}
             )
@@ -197,10 +316,8 @@ class CognitiveOllama:
                 return result["message"]["content"]
         except urllib.error.URLError as e:
             return f"[Ollama not running or model '{self.model}' not found. Start with: ollama serve]"
-        except urllib.error.HTTPError as e:
-            return f"[Ollama error: {e.code} - Model '{self.model}' may not exist. Try: ollama pull ministral-3:8b]"
         except Exception as e:
-            return f"[Error calling Ollama with model '{self.model}': {e}]"
+            return f"[Error calling Ollama: {e}]"
 
     def consolidate(self) -> Dict[str, Any]:
         """
@@ -235,22 +352,27 @@ class CognitiveOllama:
         return self.cognition.introspect()
 
 
+# Backward compatibility alias
+CognitiveOllama = CognitiveLLM
+
+
 # Interactive chat
 if __name__ == "__main__":
     import sys
 
     print("=" * 60)
-    print("COGNITIVE OLLAMA - LLM with Human-like Memory")
+    print("COGNITIVE LLM - LLM with Human-like Memory")
     print("=" * 60)
+    print("Using: LM Studio + Qwen3 Coder 30B (~50 tok/s)")
     print("Commands: /stats /consolidate /introspect /quit")
     print("=" * 60)
 
     # Get model from args
-    model = sys.argv[1] if len(sys.argv) > 1 else "ministral-3:8b"
+    model = sys.argv[1] if len(sys.argv) > 1 else "qwen/qwen3-coder-30b"
     print(f"\nModel: {model}")
 
-    # Initialize
-    ai = CognitiveOllama(model=model)
+    # Initialize with LM Studio
+    ai = CognitiveLLM(model=model, backend="lmstudio")
 
     while True:
         try:

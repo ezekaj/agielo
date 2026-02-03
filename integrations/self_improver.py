@@ -20,10 +20,9 @@ This creates TRUE self-improvement:
 
 import json
 import os
-import hashlib
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
 
 
 @dataclass

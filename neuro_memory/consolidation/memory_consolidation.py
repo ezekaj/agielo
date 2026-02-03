@@ -23,7 +23,6 @@ import numpy as np
 from typing import List, Dict, Optional, Tuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import heapq
 from collections import defaultdict
 
 

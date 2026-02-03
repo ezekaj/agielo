@@ -13,12 +13,21 @@ This creates a growing AI that gets smarter over time!
 """
 
 import os
+import sys
 import json
 import pickle
 import numpy as np
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
+
+# Add parent to path for config imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    from config.constants import MAX_KNOWLEDGE_INJECTION_CHARS
+except ImportError:
+    MAX_KNOWLEDGE_INJECTION_CHARS = 10000
 
 
 class KnowledgeBase:
@@ -441,7 +450,8 @@ class SelfTrainer:
             for i, part in enumerate(knowledge_parts[:5], 1):  # Max 5 items
                 knowledge += f"\n{i}. {part}"
             knowledge += "\n\n[Use the above facts in your answer. If the answer is there, use it directly.]"
-            return knowledge
+            # Enforce max length to prevent context overflow
+            return knowledge[:MAX_KNOWLEDGE_INJECTION_CHARS]
 
         return ""
 

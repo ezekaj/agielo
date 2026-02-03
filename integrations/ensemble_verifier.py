@@ -19,21 +19,14 @@ Verifiers:
 
 import ast
 import re
-import sys
 import os
 import subprocess
 import tempfile
-import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any, Callable
-
-# Add parent directory to path for config import
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config.paths import EVOLUTION_DIR
 
 
 class VotingStrategy(Enum):

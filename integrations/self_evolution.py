@@ -18,7 +18,6 @@ import sys
 import json
 import hashlib
 import subprocess
-import time
 import atexit
 import weakref
 from pathlib import Path
@@ -28,7 +27,7 @@ from datetime import datetime
 # Add parent directory to path for config import
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config.paths import (
-    KNOWLEDGE_DIR, EVOLUTION_DIR, TRAINING_DATA_FILE,
+    EVOLUTION_DIR, TRAINING_DATA_FILE,
     LEARNED_HASHES_FILE, BENCHMARK_HISTORY_FILE, EVOLUTION_STATE_FILE,
     ADAPTERS_DIR, LLAMA_FACTORY_OUTPUT_DIR, MLX_MODEL_PATH, HF_MODEL_PATH
 )
@@ -36,8 +35,7 @@ from config.paths import (
 # Import code evolution system for true self-modification
 try:
     from integrations.code_evolution import (
-        CodeEvolution, CodeChangeType, ValidationResult,
-        get_code_evolution
+        CodeEvolution, CodeChangeType, ValidationResult
     )
     CODE_EVOLUTION_AVAILABLE = True
 except ImportError:

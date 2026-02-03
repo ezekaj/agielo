@@ -14,7 +14,7 @@ How it works:
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
 
 class Benchmark:

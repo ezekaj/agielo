@@ -22,7 +22,7 @@ import atexit
 import gc
 import numpy as np
 import weakref
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 import json
@@ -31,18 +31,13 @@ import threading
 import time
 from pathlib import Path
 import chromadb
-from chromadb.config import Settings
 
 # Import Ebbinghaus forgetting and spaced repetition
 from neuro_memory.memory.forgetting import (
     EbbinghausForgetting,
     EbbinghausConfig,
-    SpacedRepetitionScheduler,
-    SpacedRepetitionConfig
+    SpacedRepetitionScheduler
 )
-
-# Import numerical stability utilities for validation
-from utils.numerical import validate_finite
 
 # Import constants from config
 from config.constants import (

@@ -16,7 +16,7 @@ This transforms the AI from simple fact storage to human-like memory!
 import json
 import logging
 import numpy as np
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from datetime import datetime
 import sys
 from pathlib import Path
@@ -29,7 +29,6 @@ from neuro_memory import (
     SurpriseConfig,
     EpisodicMemoryStore,
     EpisodicMemoryConfig,
-    Episode,
     TwoStageRetriever,
     RetrievalConfig
 )

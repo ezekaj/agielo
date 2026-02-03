@@ -29,7 +29,7 @@ import time
 import re
 import urllib.request
 import urllib.parse
-from typing import List, Dict, Optional
+from typing import List, Dict
 from dataclasses import dataclass
 from datetime import datetime
 

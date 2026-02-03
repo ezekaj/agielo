@@ -15,11 +15,9 @@ This gives the AI eyes and hands on the web!
 
 import os
 import time
-import json
 import re
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from typing import Dict, List
 
 # Try different browser automation libraries
 BROWSER_AVAILABLE = False

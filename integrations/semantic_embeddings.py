@@ -15,7 +15,7 @@ import numpy as np
 import os
 import pickle
 import hashlib
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict
 from pathlib import Path
 import threading
 
@@ -288,8 +288,122 @@ class SemanticEmbedder:
         emb2 = self.embed(text2)
         return float(np.dot(emb1, emb2))
 
-    def most_similar(self, query: str, candidates: List[str], k: int = 5) -> List[tuple]:
-        """Find most similar texts from candidates."""
+    def enhanced_similarity(self, text1: str, text2: str) -> float:
+        """
+        Compute enhanced similarity combining multiple signals.
+
+        Combines:
+        1. Semantic embedding similarity
+        2. Word overlap (Jaccard) with stemming
+        3. Character n-gram overlap
+        4. Length ratio
+        5. Substring matching bonus
+
+        Returns:
+            Combined similarity score [0, 1]
+        """
+        t1_lower = text1.lower().strip()
+        t2_lower = text2.lower().strip()
+
+        # 1. Embedding similarity (primary signal)
+        emb_sim = self.similarity(text1, text2)
+
+        # 2. Word-level Jaccard similarity with simple stemming
+        words1 = set(t1_lower.split())
+        words2 = set(t2_lower.split())
+
+        # Add stems
+        stems1 = set()
+        stems2 = set()
+        for w in words1:
+            stems1.add(w)
+            if w.endswith('ing') and len(w) > 4:
+                stems1.add(w[:-3])
+            elif w.endswith('ed') and len(w) > 3:
+                stems1.add(w[:-2])
+            elif w.endswith('s') and len(w) > 3:
+                stems1.add(w[:-1])
+
+        for w in words2:
+            stems2.add(w)
+            if w.endswith('ing') and len(w) > 4:
+                stems2.add(w[:-3])
+            elif w.endswith('ed') and len(w) > 3:
+                stems2.add(w[:-2])
+            elif w.endswith('s') and len(w) > 3:
+                stems2.add(w[:-1])
+
+        word_intersection = len(stems1 & stems2)
+        word_union = len(stems1 | stems2)
+        word_jaccard = word_intersection / word_union if word_union > 0 else 0.0
+
+        # 3. Character n-gram similarity (helps with typos/variations)
+        ngrams1 = self._get_char_ngrams(t1_lower, n=3)
+        ngrams2 = self._get_char_ngrams(t2_lower, n=3)
+        ngram_intersection = len(ngrams1 & ngrams2)
+        ngram_union = len(ngrams1 | ngrams2)
+        ngram_sim = ngram_intersection / ngram_union if ngram_union > 0 else 0.0
+
+        # 4. Length ratio
+        len1, len2 = len(t1_lower), len(t2_lower)
+        if len1 > 0 and len2 > 0:
+            length_ratio = min(len1, len2) / max(len1, len2)
+        else:
+            length_ratio = 0.0
+
+        # 5. Substring matching bonus
+        substring_bonus = 0.0
+        if t1_lower in t2_lower or t2_lower in t1_lower:
+            substring_bonus = 0.3
+        elif len(t1_lower) >= 3 and len(t2_lower) >= 3:
+            # Check for common prefix/suffix
+            min_len = min(len(t1_lower), len(t2_lower))
+            prefix_len = 0
+            for i in range(min_len):
+                if t1_lower[i] == t2_lower[i]:
+                    prefix_len += 1
+                else:
+                    break
+            if prefix_len >= 3:
+                substring_bonus = 0.2 * (prefix_len / min_len)
+
+        # Combine scores with adjusted weights
+        combined = (
+            0.35 * emb_sim +
+            0.2 * word_jaccard +
+            0.25 * ngram_sim +
+            0.1 * length_ratio +
+            substring_bonus
+        )
+
+        return float(np.clip(combined, 0.0, 1.0))
+
+    def _get_char_ngrams(self, text: str, n: int = 3) -> set:
+        """Extract character n-grams from text."""
+        if len(text) < n:
+            return {text}
+        return {text[i:i+n] for i in range(len(text) - n + 1)}
+
+    def most_similar(self, query: str, candidates: List[str], k: int = 5, enhanced: bool = False) -> List[tuple]:
+        """
+        Find most similar texts from candidates.
+
+        Args:
+            query: Query text
+            candidates: List of candidate texts
+            k: Number of results
+            enhanced: Use enhanced similarity (slower but better for short texts)
+
+        Returns:
+            List of (text, score) tuples
+        """
+        if enhanced:
+            # Use enhanced similarity for better accuracy
+            scores = [(c, self.enhanced_similarity(query, c)) for c in candidates]
+            scores.sort(key=lambda x: x[1], reverse=True)
+            return scores[:k]
+
+        # Fast path: embedding-only similarity
         query_emb = self.embed(query)
         candidate_embs = self.embed_batch(candidates)
 
@@ -300,6 +414,64 @@ class SemanticEmbedder:
         top_indices = np.argsort(similarities)[::-1][:k]
 
         return [(candidates[i], float(similarities[i])) for i in top_indices]
+
+    def search(
+        self,
+        query: str,
+        documents: List[str],
+        k: int = 5,
+        min_score: float = 0.0,
+        boost_exact_match: bool = True
+    ) -> List[tuple]:
+        """
+        Search documents for query with multiple matching strategies.
+
+        Args:
+            query: Search query
+            documents: Documents to search
+            k: Number of results
+            min_score: Minimum similarity threshold
+            boost_exact_match: Boost documents containing exact query terms
+
+        Returns:
+            List of (document, score) tuples
+        """
+        if not documents:
+            return []
+
+        # Get embedding similarities
+        query_emb = self.embed(query)
+        doc_embs = self.embed_batch(documents)
+        emb_similarities = np.dot(doc_embs, query_emb)
+
+        # Calculate boosted scores
+        query_lower = query.lower()
+        query_words = set(query_lower.split())
+        results = []
+
+        for i, doc in enumerate(documents):
+            score = float(emb_similarities[i])
+
+            if boost_exact_match:
+                doc_lower = doc.lower()
+
+                # Exact query match boost
+                if query_lower in doc_lower:
+                    score += 0.3
+
+                # Word overlap boost
+                doc_words = set(doc_lower.split())
+                overlap = len(query_words & doc_words)
+                if overlap > 0:
+                    score += overlap * 0.05
+
+            if score >= min_score:
+                results.append((doc, score))
+
+        # Sort by score
+        results.sort(key=lambda x: x[1], reverse=True)
+
+        return results[:k]
 
     def _load_cache(self):
         """Load embedding cache from disk."""
