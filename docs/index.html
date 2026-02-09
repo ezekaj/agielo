@@ -273,7 +273,11 @@
           <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
         </div>
 
-        <div class="hidden md:block">
+        <div class="hidden md:flex items-center gap-3">
+          <div id="apiStatus" class="flex items-center gap-1.5 text-xs text-gray-400" title="API connection status">
+            <span id="apiDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+            <span id="apiLabel">Offline</span>
+          </div>
           <a href="#simulator" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Run Simulation</a>
         </div>
 
@@ -1097,6 +1101,77 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
 
 
     // =====================================================
+    // API CONNECTION
+    // =====================================================
+    const API_BASE = 'https://zedigital-human-cognition.fly.dev';
+    let apiConnected = false;
+
+    const scenarioKeyMap = [
+      'sentence_processing',
+      'memory_recall',
+      'financial_decision',
+      'word_learning',
+      'danger_response',
+    ];
+
+    // Module key mapping: API module IDs -> SVG module data-module attributes
+    const apiModuleToSvg = {
+      prediction: 'sensory',
+      memory: 'memory',
+      learning: 'longterm_memory',
+      dual_process: 'dualprocess',
+      executive: 'executive',
+      reasoning: 'cortical',
+      motivation: 'decision',
+      emotion: 'emotion',
+      self_awareness: 'executive',
+      language: 'language',
+      social: 'cortical',
+      embodied: 'motor',
+      creativity: 'cortical',
+      cognitive_maps: 'longterm_memory',
+      time: 'cortical',
+      sleep: 'longterm_memory',
+    };
+
+    async function checkApiConnection() {
+      const dot = document.getElementById('apiDot');
+      const label = document.getElementById('apiLabel');
+      try {
+        const res = await fetch(API_BASE + '/api/health', { signal: AbortSignal.timeout(5000) });
+        if (res.ok) {
+          const data = await res.json();
+          apiConnected = true;
+          dot.className = 'w-2 h-2 rounded-full bg-green-500';
+          label.textContent = data.agent_available ? 'Live (Real Engine)' : 'Live (Fallback)';
+          label.className = '';
+          document.getElementById('apiStatus').className = 'flex items-center gap-1.5 text-xs text-green-600';
+          return true;
+        }
+      } catch (e) {}
+      apiConnected = false;
+      dot.className = 'w-2 h-2 rounded-full bg-gray-300';
+      label.textContent = 'Offline';
+      document.getElementById('apiStatus').className = 'flex items-center gap-1.5 text-xs text-gray-400';
+      return false;
+    }
+
+    checkApiConnection();
+    setInterval(checkApiConnection, 30000);
+
+    async function apiSimulate(scenarioKey) {
+      const res = await fetch(API_BASE + '/api/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: scenarioKey }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) throw new Error('API error: ' + res.status);
+      return await res.json();
+    }
+
+
+    // =====================================================
     // COGNITIVE SIMULATOR
     // =====================================================
 
@@ -1510,7 +1585,7 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
       runSimulation();
     });
 
-    function runSimulation() {
+    async function runSimulation() {
       isSimulating = true;
       const btn = document.getElementById('runSimBtn');
       btn.textContent = 'Simulating...';
@@ -1523,10 +1598,79 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
       document.getElementById('resultsPanel').classList.add('hidden');
 
       const scenario = scenarios[selectedScenario];
-      const steps = scenario.steps;
       simTimeouts = [];
 
-      // Get speed multiplier from param overrides
+      // Try API first, fall back to client-side
+      if (apiConnected) {
+        try {
+          addLogEntry(0, 'executive', 'Connecting to real cognitive engine...');
+          const scenarioKey = scenarioKeyMap[selectedScenario];
+          const apiResult = await apiSimulate(scenarioKey);
+          runApiVisualization(apiResult, scenario);
+          return;
+        } catch (e) {
+          document.getElementById('simLog').innerHTML = '';
+          addLogEntry(0, 'executive', 'API unavailable, running client-side simulation.');
+        }
+      }
+
+      // Fallback: client-side simulation
+      runClientSimulation(scenario);
+    }
+
+    function runApiVisualization(apiResult, fallbackScenario) {
+      const steps = apiResult.steps || [];
+      const engineLabel = apiResult.engine === 'real' ? 'Real Cognitive Engine' : 'Fallback Engine';
+      addLogEntry(0, 'executive', 'Engine: ' + engineLabel + ' | Scenario: ' + apiResult.scenario_name);
+
+      let cumDelay = 0;
+      const stepDelay = 600;
+      let prevSvgModule = null;
+
+      steps.forEach((step, idx) => {
+        const svgModule = apiModuleToSvg[step.module] || 'executive';
+        const delay = cumDelay;
+        const duration = stepDelay;
+
+        const t1 = setTimeout(() => {
+          lightModule(svgModule);
+          const timeLabel = step.duration_ms ? step.duration_ms.toFixed(1) + 'ms' : '';
+          addLogEntry((delay) / 1000, svgModule, `[Phase ${step.phase}: ${step.phase_name}] ${step.module_name}: ${step.action}`);
+
+          if (prevSvgModule && prevSvgModule !== svgModule) {
+            const arrow = drawFlowArrow(prevSvgModule, svgModule);
+            if (arrow) setTimeout(() => arrow.classList.add('active-flow'), 50);
+          }
+          prevSvgModule = svgModule;
+        }, delay);
+        simTimeouts.push(t1);
+
+        const t2 = setTimeout(() => {
+          addLogEntry((delay + duration * 0.7) / 1000, svgModule, step.output);
+          setTimeout(() => unlightModule(svgModule), 200);
+        }, delay + duration * 0.7);
+        simTimeouts.push(t2);
+
+        cumDelay += stepDelay;
+      });
+
+      const totalVizTime = cumDelay + 500;
+      const t3 = setTimeout(() => {
+        addLogEntry(totalVizTime / 1000, 'executive', 'Simulation complete (' + engineLabel + ').');
+        unlightAllModules();
+        showApiResults(apiResult, fallbackScenario);
+
+        isSimulating = false;
+        const btn = document.getElementById('runSimBtn');
+        btn.textContent = 'Run Simulation';
+        btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      }, totalVizTime);
+      simTimeouts.push(t3);
+    }
+
+    function runClientSimulation(scenario) {
+      const steps = scenario.steps;
+
       function getSpeedMultiplier(moduleKey) {
         const speedKey = moduleKey + '_speed';
         const override = paramOverrides[speedKey];
@@ -1534,72 +1678,117 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
           const info = moduleInfo[moduleKey];
           if (info) {
             const defaultParam = info.params.find(p => p.key === 'speed');
-            if (defaultParam) {
-              return override / defaultParam.value;
-            }
+            if (defaultParam) return override / defaultParam.value;
           }
         }
         return 1;
       }
-
-      let prevModuleKey = null;
 
       steps.forEach((step, idx) => {
         const speedMult = getSpeedMultiplier(step.module);
         const adjustedDelay = step.delay * speedMult;
         const adjustedDuration = step.duration * speedMult;
 
-        // Light up module
         const t1 = setTimeout(() => {
           lightModule(step.module);
           addLogEntry(adjustedDelay / 1000, step.module, step.input);
-
-          // Draw arrow from previous step
           if (idx > 0) {
             const prevKey = steps[idx - 1].module;
             if (prevKey !== step.module) {
               const arrow = drawFlowArrow(prevKey, step.module);
-              if (arrow) {
-                setTimeout(() => arrow.classList.add('active-flow'), 50);
-              }
+              if (arrow) setTimeout(() => arrow.classList.add('active-flow'), 50);
             }
           }
         }, adjustedDelay);
         simTimeouts.push(t1);
 
-        // Show output and dim module
         const t2 = setTimeout(() => {
           addLogEntry((adjustedDelay + adjustedDuration) / 1000, step.module, step.output);
-          // Dim after a bit
-          setTimeout(() => {
-            unlightModule(step.module);
-          }, 200);
+          setTimeout(() => unlightModule(step.module), 200);
         }, adjustedDelay + adjustedDuration);
         simTimeouts.push(t2);
       });
 
-      // Completion
       const totalDuration = scenario.duration;
       const t3 = setTimeout(() => {
-        addLogEntry(totalDuration / 1000, 'executive', 'Simulation complete.');
+        addLogEntry(totalDuration / 1000, 'executive', 'Simulation complete (client-side).');
         unlightAllModules();
         showResults(scenario);
-
         isSimulating = false;
+        const btn = document.getElementById('runSimBtn');
         btn.textContent = 'Run Simulation';
         btn.classList.remove('opacity-60', 'cursor-not-allowed');
       }, totalDuration + 500);
       simTimeouts.push(t3);
     }
 
-    // ---- Show Results ----
+    // ---- Show API Results ----
+    function showApiResults(apiResult, fallbackScenario) {
+      const panel = document.getElementById('resultsPanel');
+      const timings = document.getElementById('resultsTimings');
+      const thought = document.getElementById('resultsThought');
+      const comparison = document.getElementById('resultsComparison');
+
+      let timingsHtml = '';
+      const apiSteps = apiResult.steps || [];
+      const maxDuration = Math.max(...apiSteps.map(s => s.duration_ms || 1), 1);
+      apiSteps.forEach(step => {
+        const dur = step.duration_ms || 0;
+        const pct = (dur / maxDuration) * 100;
+        const svgMod = apiModuleToSvg[step.module] || 'executive';
+        const info = moduleInfo[svgMod];
+        const color = info ? info.color : '#F97316';
+        timingsHtml += `
+          <div class="flex items-center gap-3 text-xs">
+            <div class="w-28 font-medium text-gray-700 truncate">${step.module_name}</div>
+            <div class="flex-1 results-bar">
+              <div class="results-bar-fill" style="width:${pct}%;background:${color}"></div>
+            </div>
+            <div class="w-14 text-right font-mono text-gray-500">${dur.toFixed(1)}ms</div>
+          </div>
+        `;
+      });
+      timings.innerHTML = timingsHtml;
+
+      const engineTag = apiResult.engine === 'real'
+        ? '<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 mr-2">Real Engine</span>'
+        : '<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 mr-2">Fallback Engine</span>';
+
+      const phasesStr = (apiResult.phases_traversed || []).map(p => 'Phase ' + p).join(' -> ');
+      const activationsHtml = Object.entries(apiResult.module_activations || {}).map(([k, v]) => {
+        return `<span class="inline-block px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-700 mr-1 mb-1">${k}: ${typeof v.activation === 'number' ? v.activation.toFixed(2) : v.activation}</span>`;
+      }).join('');
+
+      thought.innerHTML = `
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Processing Details</div>
+        <div class="mb-2">${engineTag} Phases: ${phasesStr}</div>
+        <p class="text-sm text-gray-700 leading-relaxed mb-3">${fallbackScenario.thought}</p>
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Module Activations</div>
+        <div class="flex flex-wrap">${activationsHtml || '<span class="text-gray-400 text-xs">No activation data</span>'}</div>
+      `;
+
+      const totalMs = apiResult.total_duration_ms || 0;
+      const humanTime = fallbackScenario.humanTime;
+      comparison.innerHTML = `
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Performance (Real Computation)</div>
+        <div>Cognitive engine:  ${totalMs.toFixed(1)}ms total computation</div>
+        <div>Human brain:       ~${humanTime}ms</div>
+        <div>Engine type:       ${apiResult.engine || 'unknown'}</div>
+        ${apiResult.agent_step_count ? `<div>Agent step count:   ${apiResult.agent_step_count}</div>` : ''}
+        <div class="mt-1 text-gray-400">Results from the deployed cognitive simulation API.</div>
+      `;
+
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ---- Show Client-Side Results (fallback) ----
     function showResults(scenario) {
       const panel = document.getElementById('resultsPanel');
       const timings = document.getElementById('resultsTimings');
       const thought = document.getElementById('resultsThought');
       const comparison = document.getElementById('resultsComparison');
 
-      // Timings
       let timingsHtml = '';
       const maxDuration = Math.max(...scenario.steps.map(s => s.duration));
       scenario.steps.forEach(step => {
@@ -1618,13 +1807,12 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
       });
       timings.innerHTML = timingsHtml;
 
-      // Thought process
       thought.innerHTML = `
         <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Thought Process</div>
+        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600 mb-2">Client-Side Simulation</span>
         <p class="text-sm text-gray-700 leading-relaxed">${scenario.thought}</p>
       `;
 
-      // Comparison
       const simTime = (scenario.duration / 1000).toFixed(1);
       const humanTime = scenario.humanTime;
       const speedup = Math.round(scenario.duration / humanTime);
