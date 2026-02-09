@@ -3,264 +3,715 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Human Cognition AI — Neuroscience-Based Cognitive Architecture</title>
-  <meta name="description" content="A complete implementation of human-like cognition based on neuroscience research. Models human thinking, emotion, decision-making, memory, creativity, and self-awareness.">
-  <meta name="theme-color" content="#0A0F1A">
+  <title>Human Cognition AI (AGiELO) — A Neuroscience-Based Cognitive Architecture</title>
+  <meta name="description" content="A complete implementation of human-like cognition based on neuroscience research. 15+ cognitive modules implementing brain-realistic cognition.">
+  <meta name="theme-color" content="#F8FAFC">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            primary: '#1E3A5F',
+            surface: '#F8FAFC',
+            navy: '#0A0F1A',
             accent: '#F97316',
-            surface: '#0A0F1A',
+            'accent-hover': '#EA580C',
+            'layer-blue': '#3B82F6',
+            'layer-green': '#22C55E',
+            'layer-yellow': '#EAB308',
+            'layer-amber': '#F59E0B',
+            'layer-orange': '#F97316',
+          },
+          fontFamily: {
+            'serif': ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
           }
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    * { font-family: 'Inter', system-ui, sans-serif; }
-    .gradient-hero { background: linear-gradient(135deg, #0A0F1A 0%, #0E1829 40%, #1E3A5F 70%, #0A0F1A 100%); }
-    .gradient-blue { background: linear-gradient(135deg, #1E3A5F, #F97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-    .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.06); }
-    .glow { box-shadow: 0 0 40px rgba(249,115,22,0.15); }
-    .card-hover { transition: transform 0.3s, box-shadow 0.3s; }
-    .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
-    .fade-in { animation: fadeIn 0.8s ease-out forwards; opacity: 0; }
-    @keyframes fadeIn { to { opacity: 1; } }
-    .fade-in:nth-child(2) { animation-delay: 0.1s; }
-    .fade-in:nth-child(3) { animation-delay: 0.2s; }
-    .fade-in:nth-child(4) { animation-delay: 0.3s; }
-    .fade-in:nth-child(5) { animation-delay: 0.4s; }
-    .fade-in:nth-child(6) { animation-delay: 0.5s; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #F8FAFC;
+      color: #0A0F1A;
+    }
+    h1, h2, h3, h4 {
+      font-family: Georgia, Cambria, 'Times New Roman', serif;
+    }
+
+    /* Architecture diagram layers */
+    .arch-layer {
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .arch-layer:hover {
+      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    }
+    .arch-layer-content {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.3s ease;
+    }
+    .arch-layer.expanded .arch-layer-content {
+      max-height: 400px;
+      padding-top: 12px;
+    }
+
+    /* Periodic table tiles */
+    .module-tile {
+      width: 64px;
+      height: 64px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-weight: 600;
+      font-size: 0.875rem;
+      position: relative;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .module-tile:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .module-tile.active {
+      outline: 2px solid #F97316;
+      outline-offset: 2px;
+    }
+    .module-tile .tile-abbr {
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .module-tile .tile-num {
+      font-size: 0.6rem;
+      opacity: 0.7;
+      line-height: 1;
+      margin-bottom: 2px;
+    }
+
+    /* Tile colors */
+    .tile-foundation { background: #DBEAFE; color: #1E40AF; }
+    .tile-processing { background: #DCFCE7; color: #166534; }
+    .tile-motivation { background: #FEF9C3; color: #854D0E; }
+    .tile-interface { background: #FEF3C7; color: #92400E; }
+    .tile-advanced { background: #FFEDD5; color: #9A3412; }
+
+    /* Code block syntax highlighting */
+    .code-keyword { color: #2563EB; }
+    .code-string { color: #F97316; }
+    .code-comment { color: #9CA3AF; }
+    .code-func { color: #0A0F1A; font-weight: 500; }
+    .code-number { color: #7C3AED; }
+
+    /* Table styling */
+    .comparison-table th {
+      font-family: Georgia, Cambria, serif;
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+
+    /* Hanging indent for bibliography */
+    .reference {
+      padding-left: 2.5rem;
+      text-indent: -2.5rem;
+    }
+
+    /* BibTeX popup */
+    .bibtex-popup {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: rgba(0,0,0,0.4);
+      align-items: center;
+      justify-content: center;
+    }
+    .bibtex-popup.show {
+      display: flex;
+    }
+
+    /* Smooth scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #F1F5F9; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+    /* Mobile hamburger */
+    .mobile-menu {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+    .mobile-menu.open {
+      max-height: 300px;
+    }
   </style>
 </head>
-<body class="bg-surface text-gray-200 antialiased">
+<body class="bg-surface text-navy antialiased">
 
-  <nav class="fixed top-0 w-full z-50 glass">
-    <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-      <a href="#" class="text-lg font-bold gradient-blue">Human Cognition AI</a>
-      <div class="flex items-center gap-4">
-        <a href="https://github.com/ezekaj/agielo" target="_blank" rel="noopener noreferrer" class="text-sm text-gray-400 hover:text-accent transition-colors">GitHub</a>
-        <a href="https://zedigital.tech" target="_blank" rel="noopener noreferrer" class="text-sm text-gray-400 hover:text-accent transition-colors">Portfolio</a>
+  <!-- ==================== NAV ==================== -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center justify-between h-14">
+        <a href="#" class="font-serif text-lg font-bold text-navy tracking-tight">Human Cognition AI</a>
+
+        <div class="hidden md:flex items-center gap-8">
+          <a href="#architecture" class="text-sm text-gray-600 hover:text-navy transition-colors">Architecture</a>
+          <a href="#modules" class="text-sm text-gray-600 hover:text-navy transition-colors">Modules</a>
+          <a href="#research" class="text-sm text-gray-600 hover:text-navy transition-colors">Research</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
+        </div>
+
+        <div class="hidden md:block">
+          <a href="#" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Run Examples</a>
+        </div>
+
+        <button id="hamburger" class="md:hidden p-2 text-gray-600 hover:text-navy" aria-label="Toggle menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <div id="mobileMenu" class="mobile-menu md:hidden">
+        <div class="py-3 border-t border-gray-100 space-y-2">
+          <a href="#architecture" class="block text-sm text-gray-600 py-1.5">Architecture</a>
+          <a href="#modules" class="block text-sm text-gray-600 py-1.5">Modules</a>
+          <a href="#research" class="block text-sm text-gray-600 py-1.5">Research</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="block text-sm text-gray-600 py-1.5">GitHub</a>
+          <a href="#" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded mt-1">Run Examples</a>
+        </div>
       </div>
     </div>
   </nav>
 
-  <section class="gradient-hero min-h-screen flex items-center relative overflow-hidden">
-    <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 30% 60%, rgba(30,58,95,0.5) 0%, transparent 50%), radial-gradient(circle at 70% 30%, rgba(249,115,22,0.3) 0%, transparent 50%);"></div>
-    <div class="max-w-6xl mx-auto px-6 pt-24 pb-16 relative z-10">
-      <div class="max-w-3xl">
-        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-xs font-medium text-accent mb-6">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-          Neuroscience-Based Cognitive Architecture
-        </div>
-        <h1 class="text-4xl sm:text-5xl md:text-6xl font-800 leading-tight mb-6">
-          <span class="text-white">Human </span><span class="gradient-blue">Cognition AI</span>
-        </h1>
-        <p class="text-lg sm:text-xl text-gray-400 mb-8 max-w-2xl leading-relaxed">
-          A complete implementation of human-like cognition based on neuroscience research. Models human thinking, emotion, decision-making, memory, creativity, and self-awareness with dual-process systems and theory of mind.
-        </p>
-        <div class="flex flex-wrap items-center gap-4 mb-10">
-          <div class="px-5 py-2.5 rounded-xl glass glow text-accent font-bold text-lg">15+ Cognitive Modules</div>
-          <div class="px-5 py-2.5 rounded-xl glass text-gray-300 font-medium">2000+ ops/sec</div>
-          <div class="px-5 py-2.5 rounded-xl glass text-gray-300 font-medium">Sub-millisecond</div>
-        </div>
-        <a href="https://github.com/ezekaj/agielo" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-accent/10 border border-accent/30 text-accent hover:bg-accent/20 transition-all font-medium">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-          View on GitHub
-        </a>
-      </div>
-    </div>
-  </section>
 
-  <section class="py-20 sm:py-28">
-    <div class="max-w-6xl mx-auto px-6">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-6 text-white">What It Does</h2>
-      <div class="max-w-3xl space-y-4 text-gray-400 leading-relaxed">
-        <p>Human Cognition AI is a comprehensive cognitive architecture that replicates how the human brain processes information, makes decisions, and learns from experience. Built on established neuroscience principles, it implements over 15 interconnected modules spanning perception, reasoning, memory, emotion, and social cognition.</p>
-        <p>The system uses dual-process thinking inspired by Kahneman's research, combining fast intuitive responses (System 1) with slow deliberate reasoning (System 2). Emotions follow Damasio's somatic marker hypothesis, influencing decision-making just as they do in biological brains. Memory follows Ebbinghaus forgetting curves with spaced repetition for realistic retention.</p>
-        <p>With curiosity-driven exploration via Random Network Distillation and sleep-based memory consolidation, the architecture autonomously learns, adapts, and organizes knowledge -- achieving 2000+ operations per second with sub-millisecond core cycle times.</p>
-      </div>
-    </div>
-  </section>
+  <!-- ==================== HERO ==================== -->
+  <header class="max-w-3xl mx-auto px-4 sm:px-6 pt-16 pb-12">
+    <h1 class="font-serif text-4xl sm:text-5xl font-bold text-navy leading-tight tracking-tight">
+      A Neuroscience-Based<br>Cognitive Architecture
+    </h1>
 
-  <section class="py-20 sm:py-28 relative">
-    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-accent/[0.02] to-transparent"></div>
-    <div class="max-w-6xl mx-auto px-6 relative z-10">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-12 text-white">Key Features</h2>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Dual-Process Thinking</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">System 1 (fast/intuitive) + System 2 (slow/deliberate) decision making inspired by Kahneman's research on cognitive processing.</p>
-        </div>
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Emotion System</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Appraisal-based emotions with somatic markers (Damasio) and mood regulation affecting cognitive processing and decision-making.</p>
-        </div>
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Memory Architecture</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Working, episodic, semantic, and procedural memory with Ebbinghaus forgetting curves and spaced repetition for realistic retention.</p>
-        </div>
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Curiosity-Driven Learning</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Intrinsic motivation with novelty detection using Random Network Distillation for autonomous exploration and knowledge acquisition.</p>
-        </div>
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Sleep Consolidation</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Memory replay and synaptic homeostasis during idle periods. Dreams as memory reorganization for improved knowledge integration.</p>
-        </div>
-        <div class="glass rounded-2xl p-6 card-hover fade-in">
-          <div class="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-          </div>
-          <h3 class="text-white font-semibold mb-2">Theory of Mind</h3>
-          <p class="text-gray-400 text-sm leading-relaxed">Social cognition, perspective-taking, and metacognitive self-awareness for understanding other agents and modeling their mental states.</p>
-        </div>
-      </div>
-    </div>
-  </section>
+    <p class="mt-4 text-gray-500 italic text-sm">
+      Z.E Digital Tech &mdash; Cognitive Computing Research
+    </p>
 
-  <section class="py-20 sm:py-28">
-    <div class="max-w-6xl mx-auto px-6">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-4 text-white">Cognitive Architecture</h2>
-      <p class="text-gray-400 mb-12 max-w-2xl">A 5-phase system modeling the full spectrum of human cognition.</p>
-      <div class="glass rounded-2xl p-6 sm:p-8">
-        <div class="space-y-6">
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent text-sm font-bold">1</div>
+    <hr class="my-8 border-gray-200">
+
+    <div class="border-l-4 border-accent pl-6 py-1">
+      <p class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Abstract</p>
+      <p class="text-gray-700 leading-relaxed">
+        We present a complete implementation of human-like cognitive architecture based on neuroscience research. The system implements 15+ cognitive modules including dual-process thinking (System 1/2), emotional processing with somatic markers, multi-store memory (episodic, semantic, procedural), curiosity-driven learning, theory of mind, and sleep-based memory consolidation. Built on predictive coding and Global Workspace Theory, the architecture achieves 2000+ cognitive operations per second with sub-millisecond core operations.
+      </p>
+    </div>
+
+    <div class="mt-8 flex items-center gap-6">
+      <a href="#" class="inline-block px-6 py-2.5 bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors shadow-sm">
+        Run Examples
+      </a>
+      <a href="#research" class="text-accent font-medium hover:underline">
+        Read the Comparison &rarr;
+      </a>
+    </div>
+  </header>
+
+
+  <!-- ==================== ARCHITECTURE DIAGRAM ==================== -->
+  <section id="architecture" class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-2">Cognitive Architecture</h2>
+    <p class="text-gray-500 mb-10">Five concentric phases from foundational processing to advanced cognition. Click any layer to explore its modules.</p>
+
+    <div class="relative">
+      <!-- Phase 5: Outermost -->
+      <div class="arch-layer border-2 border-layer-orange rounded-2xl p-4 sm:p-5 bg-orange-50/30" data-layer="5">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-xs font-semibold text-orange-600 uppercase tracking-wider">Phase 5: Advanced</span>
+            <span class="text-xs text-gray-500 ml-3">Creativity, Sleep Consolidation, Time Perception</span>
+          </div>
+          <svg class="w-4 h-4 text-gray-400 transition-transform arch-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="arch-layer-content">
+          <div class="grid sm:grid-cols-3 gap-3 text-sm">
+            <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Creativity Engine</strong><br><span class="text-gray-500">Conceptual blending, analogical reasoning, and divergent thought generation</span></div>
+            <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Sleep Consolidation</strong><br><span class="text-gray-500">Offline memory replay, synaptic homeostasis, and memory integration</span></div>
+            <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Time Perception</strong><br><span class="text-gray-500">Temporal reasoning, event sequencing, and duration estimation</span></div>
+          </div>
+        </div>
+
+        <!-- Phase 4 -->
+        <div class="arch-layer border-2 border-layer-amber rounded-2xl p-4 sm:p-5 mt-3 bg-amber-50/30" data-layer="4">
+          <div class="flex items-center justify-between">
             <div>
-              <div class="text-white font-medium mb-1">Foundation</div>
-              <p class="text-gray-400 text-sm leading-relaxed">Predictive coding (Free Energy Principle), memory systems, learning mechanisms. The base layer that all higher cognition builds upon.</p>
+              <span class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Phase 4: Interface</span>
+              <span class="text-xs text-gray-500 ml-3">Language, Social Cognition, Embodied Cognition</span>
+            </div>
+            <svg class="w-4 h-4 text-gray-400 transition-transform arch-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <div class="arch-layer-content">
+            <div class="grid sm:grid-cols-3 gap-3 text-sm">
+              <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Language Processing</strong><br><span class="text-gray-500">Semantic parsing, pragmatic reasoning, and natural language generation</span></div>
+              <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Social Cognition</strong><br><span class="text-gray-500">Theory of mind, empathy modeling, and social norm understanding</span></div>
+              <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Embodied Cognition</strong><br><span class="text-gray-500">Sensorimotor grounding, body schema, and environmental coupling</span></div>
             </div>
           </div>
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent text-sm font-bold">2</div>
-            <div>
-              <div class="text-white font-medium mb-1">Processing</div>
-              <p class="text-gray-400 text-sm leading-relaxed">Dual-process thinking, executive control, reasoning modules. System 1 and System 2 working together for efficient cognitive processing.</p>
+
+          <!-- Phase 3 -->
+          <div class="arch-layer border-2 border-layer-yellow rounded-2xl p-4 sm:p-5 mt-3 bg-yellow-50/30" data-layer="3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-semibold text-yellow-600 uppercase tracking-wider">Phase 3: Motivation</span>
+                <span class="text-xs text-gray-500 ml-3">Curiosity, Emotion System, Self-Awareness</span>
+              </div>
+              <svg class="w-4 h-4 text-gray-400 transition-transform arch-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </div>
-          </div>
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent text-sm font-bold">3</div>
-            <div>
-              <div class="text-white font-medium mb-1">Motivation</div>
-              <p class="text-gray-400 text-sm leading-relaxed">Curiosity engine, emotion system, self-awareness. Drives autonomous exploration and shapes decision-making through affect and intrinsic motivation.</p>
+            <div class="arch-layer-content">
+              <div class="grid sm:grid-cols-3 gap-3 text-sm">
+                <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Curiosity Drive</strong><br><span class="text-gray-500">Information-gap detection, intrinsic motivation, and novelty seeking</span></div>
+                <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Emotion System</strong><br><span class="text-gray-500">Somatic markers, valence/arousal modeling, and affective forecasting</span></div>
+                <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Self-Awareness</strong><br><span class="text-gray-500">Recursive self-modeling, metacognition, and confidence calibration</span></div>
+              </div>
             </div>
-          </div>
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent text-sm font-bold">4</div>
-            <div>
-              <div class="text-white font-medium mb-1">Interface</div>
-              <p class="text-gray-400 text-sm leading-relaxed">Language system, social cognition, embodied cognition. The bridge between internal cognitive states and external communication with the world.</p>
+
+            <!-- Phase 2 -->
+            <div class="arch-layer border-2 border-layer-green rounded-2xl p-4 sm:p-5 mt-3 bg-green-50/30" data-layer="2">
+              <div class="flex items-center justify-between">
+                <div>
+                  <span class="text-xs font-semibold text-green-600 uppercase tracking-wider">Phase 2: Processing</span>
+                  <span class="text-xs text-gray-500 ml-3">Dual-Process Thinking, Executive Function, Decision Making</span>
+                </div>
+                <svg class="w-4 h-4 text-gray-400 transition-transform arch-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </div>
+              <div class="arch-layer-content">
+                <div class="grid sm:grid-cols-3 gap-3 text-sm">
+                  <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Dual-Process Thinking</strong><br><span class="text-gray-500">System 1 fast intuition and System 2 deliberate reasoning with dynamic switching</span></div>
+                  <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Executive Function</strong><br><span class="text-gray-500">Task switching, inhibitory control, and working memory management</span></div>
+                  <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Decision Making</strong><br><span class="text-gray-500">Multi-criteria evaluation, expected utility, and satisficing strategies</span></div>
+                </div>
+              </div>
+
+              <!-- Phase 1: Innermost -->
+              <div class="arch-layer border-2 border-layer-blue rounded-2xl p-4 sm:p-5 mt-3 bg-blue-50/30" data-layer="1">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold text-blue-600 uppercase tracking-wider">Phase 1: Foundation</span>
+                    <span class="text-xs text-gray-500 ml-3">Predictive Coding, Memory Systems, Perception</span>
+                  </div>
+                  <svg class="w-4 h-4 text-gray-400 transition-transform arch-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </div>
+                <div class="arch-layer-content">
+                  <div class="grid sm:grid-cols-3 gap-3 text-sm">
+                    <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Predictive Coding</strong><br><span class="text-gray-500">Hierarchical prediction error minimization following the free-energy principle</span></div>
+                    <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Memory Systems</strong><br><span class="text-gray-500">Episodic, semantic, procedural, and working memory with distinct encoding</span></div>
+                    <div class="bg-white rounded-lg p-3 border border-gray-100"><strong>Perception</strong><br><span class="text-gray-500">Multi-modal sensory processing with top-down prediction and bottom-up error</span></div>
+                  </div>
+                </div>
+              </div>
+              <!-- End Phase 1 -->
+
             </div>
+            <!-- End Phase 2 -->
+
           </div>
-          <div class="flex items-start gap-4">
-            <div class="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center shrink-0 text-accent text-sm font-bold">5</div>
-            <div>
-              <div class="text-white font-medium mb-1">Advanced</div>
-              <p class="text-gray-400 text-sm leading-relaxed">Creativity, cognitive maps, sleep consolidation, time perception. Higher-order cognitive functions that emerge from the integrated architecture.</p>
-            </div>
-          </div>
+          <!-- End Phase 3 -->
+
         </div>
+        <!-- End Phase 4 -->
+
+      </div>
+      <!-- End Phase 5 -->
+    </div>
+  </section>
+
+
+  <!-- ==================== PERIODIC TABLE OF MODULES ==================== -->
+  <section id="modules" class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-2">The Modules</h2>
+    <p class="text-gray-500 mb-8">Each cognitive module maps to neuroscience research. Click any tile to explore.</p>
+
+    <!-- Legend -->
+    <div class="flex flex-wrap gap-4 mb-8 text-xs font-medium">
+      <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-blue-100 border border-blue-200 inline-block"></span> Foundation</div>
+      <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-100 border border-green-200 inline-block"></span> Processing</div>
+      <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-yellow-100 border border-yellow-200 inline-block"></span> Motivation</div>
+      <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-amber-100 border border-amber-200 inline-block"></span> Interface</div>
+      <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-orange-100 border border-orange-200 inline-block"></span> Advanced</div>
+    </div>
+
+    <!-- Tile Grid -->
+    <div id="moduleGrid" class="flex flex-wrap gap-2 justify-center sm:justify-start"></div>
+
+    <!-- Description Panel -->
+    <div id="modulePanel" class="mt-6 hidden">
+      <div class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+        <div class="flex items-center gap-3 mb-2">
+          <span id="panelBadge" class="inline-block px-2 py-0.5 rounded text-xs font-semibold"></span>
+          <h3 id="panelTitle" class="font-serif text-xl font-bold text-navy"></h3>
+        </div>
+        <p id="panelDesc" class="text-gray-600 leading-relaxed text-sm"></p>
+        <p id="panelBasis" class="text-gray-400 text-xs mt-3 italic"></p>
       </div>
     </div>
   </section>
 
-  <section class="py-20 sm:py-28 relative">
-    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-accent/[0.02] to-transparent"></div>
-    <div class="max-w-6xl mx-auto px-6 relative z-10">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-12 text-white">Tech Stack</h2>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div>
-          <h3 class="text-xs font-semibold text-accent uppercase tracking-wider mb-3">Core</h3>
-          <div class="flex flex-wrap gap-2">
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Python</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">NumPy</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Numba (JIT)</span>
-          </div>
-        </div>
-        <div>
-          <h3 class="text-xs font-semibold text-accent uppercase tracking-wider mb-3">AI</h3>
-          <div class="flex flex-wrap gap-2">
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Ollama</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Cognitive LLM Wrapper</span>
-          </div>
-        </div>
-        <div>
-          <h3 class="text-xs font-semibold text-accent uppercase tracking-wider mb-3">Learning</h3>
-          <div class="flex flex-wrap gap-2">
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Self-Play</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Code Evolution</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">RND Curiosity</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Active Learning</span>
-          </div>
-        </div>
-        <div>
-          <h3 class="text-xs font-semibold text-accent uppercase tracking-wider mb-3">Search</h3>
-          <div class="flex flex-wrap gap-2">
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">DuckDuckGo</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">Wikipedia</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">arXiv</span>
-            <span class="px-3 py-1.5 rounded-lg glass text-sm text-gray-300">StackExchange</span>
-          </div>
-        </div>
+
+  <!-- ==================== COMPARISON TABLE ==================== -->
+  <section id="research" class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-2">How It Compares</h2>
+    <p class="text-gray-500 mb-8">Benchmarking against established cognitive architectures and theories.</p>
+
+    <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+      <table class="comparison-table w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-200">
+            <th class="text-left px-4 py-3 text-navy">Capability</th>
+            <th class="text-left px-4 py-3 text-navy">Human Cognition AI</th>
+            <th class="text-left px-4 py-3 text-gray-500">ACT-R</th>
+            <th class="text-left px-4 py-3 text-gray-500">SOAR</th>
+            <th class="text-left px-4 py-3 text-gray-500">Global Workspace</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="bg-white border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Cognitive Modules</td>
+            <td class="px-4 py-3">15+ <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">~12</td>
+            <td class="px-4 py-3 text-gray-500">~8</td>
+            <td class="px-4 py-3 text-gray-500">Theory only</td>
+          </tr>
+          <tr class="bg-gray-50/50 border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Emotional Integration</td>
+            <td class="px-4 py-3">Full <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">Limited</td>
+            <td class="px-4 py-3 text-gray-500">None</td>
+            <td class="px-4 py-3 text-gray-500">Theoretical</td>
+          </tr>
+          <tr class="bg-white border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Memory Types</td>
+            <td class="px-4 py-3">4 (ep/sem/proc/wm) <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">2</td>
+            <td class="px-4 py-3 text-gray-500">1</td>
+            <td class="px-4 py-3 text-gray-500">Theoretical</td>
+          </tr>
+          <tr class="bg-gray-50/50 border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Learning Method</td>
+            <td class="px-4 py-3">Brain-realistic <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">Production rules</td>
+            <td class="px-4 py-3 text-gray-500">Chunking</td>
+            <td class="px-4 py-3 text-gray-500">N/A</td>
+          </tr>
+          <tr class="bg-white border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Self-Awareness</td>
+            <td class="px-4 py-3">Recursive <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">No</td>
+            <td class="px-4 py-3 text-gray-500">No</td>
+            <td class="px-4 py-3 text-gray-500">Theoretical</td>
+          </tr>
+          <tr class="bg-gray-50/50 border-b border-gray-100">
+            <td class="px-4 py-3 font-medium">Open Source</td>
+            <td class="px-4 py-3">MIT <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">Academic</td>
+            <td class="px-4 py-3 text-gray-500">Academic</td>
+            <td class="px-4 py-3 text-gray-500">N/A</td>
+          </tr>
+          <tr class="bg-white">
+            <td class="px-4 py-3 font-medium">Speed</td>
+            <td class="px-4 py-3">2000+ ops/sec <span class="text-accent font-bold">&check;</span></td>
+            <td class="px-4 py-3 text-gray-500">Varies</td>
+            <td class="px-4 py-3 text-gray-500">Varies</td>
+            <td class="px-4 py-3 text-gray-500">N/A</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+
+  <!-- ==================== PERFORMANCE STATS ==================== -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm">
+        <div class="font-serif text-3xl font-bold text-accent">15+</div>
+        <div class="text-sm text-gray-500 mt-1">Cognitive Modules</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm">
+        <div class="font-serif text-3xl font-bold text-accent">2,000+</div>
+        <div class="text-sm text-gray-500 mt-1">Operations/sec</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm">
+        <div class="font-serif text-3xl font-bold text-accent">&lt;1ms</div>
+        <div class="text-sm text-gray-500 mt-1">Core Operation Latency</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-6 text-center shadow-sm">
+        <div class="font-serif text-3xl font-bold text-accent">5</div>
+        <div class="text-sm text-gray-500 mt-1">Architecture Phases</div>
       </div>
     </div>
   </section>
 
-  <section class="py-20 sm:py-28">
-    <div class="max-w-6xl mx-auto px-6">
-      <h2 class="text-3xl sm:text-4xl font-bold mb-12 text-white">Performance</h2>
-      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="glass rounded-2xl p-6 text-center glow">
-          <div class="text-3xl sm:text-4xl font-bold gradient-blue mb-2">15+</div>
-          <div class="text-sm text-gray-400">Cognitive Modules</div>
-        </div>
-        <div class="glass rounded-2xl p-6 text-center">
-          <div class="text-3xl sm:text-4xl font-bold text-white mb-2">2000+</div>
-          <div class="text-sm text-gray-400">Operations/Second</div>
-        </div>
-        <div class="glass rounded-2xl p-6 text-center">
-          <div class="text-3xl sm:text-4xl font-bold text-white mb-2">&lt;1ms</div>
-          <div class="text-sm text-gray-400">Core Cycle Time</div>
-        </div>
-        <div class="glass rounded-2xl p-6 text-center">
-          <div class="text-3xl sm:text-4xl font-bold text-white mb-2">5</div>
-          <div class="text-sm text-gray-400">Architecture Phases</div>
-        </div>
+
+  <!-- ==================== QUICK START ==================== -->
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-2">Getting Started</h2>
+    <p class="text-gray-500 mb-8">Initialize a cognitive agent and explore its capabilities in a few lines of Python.</p>
+
+    <div class="bg-slate-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+      <div class="flex items-center gap-2 px-4 py-2.5 bg-slate-100 border-b border-gray-200">
+        <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-yellow-400"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+        <span class="ml-2 text-xs text-gray-400 font-mono">example.py</span>
       </div>
+      <pre class="px-5 py-5 text-sm leading-relaxed overflow-x-auto font-mono"><code><span class="code-keyword">from</span> core.cognitive_agent <span class="code-keyword">import</span> CognitiveAgent
+<span class="code-keyword">import</span> numpy <span class="code-keyword">as</span> np
+
+<span class="code-comment"># Initialize the cognitive architecture</span>
+agent = <span class="code-func">CognitiveAgent</span>()
+
+<span class="code-comment"># Process sensory input</span>
+observation = np.<span class="code-func">random.randn</span>(<span class="code-number">64</span>)
+percept = agent.<span class="code-func">perceive</span>(observation)
+
+<span class="code-comment"># Deliberate reasoning (System 2)</span>
+thought = agent.<span class="code-func">think</span>(<span class="code-string">"What patterns emerge from this data?"</span>)
+
+<span class="code-comment"># Emotional decision-making</span>
+decision = agent.<span class="code-func">decide</span>([<span class="code-string">"explore"</span>, <span class="code-string">"exploit"</span>, <span class="code-string">"rest"</span>])
+
+<span class="code-comment"># Metacognitive reflection</span>
+insight = agent.<span class="code-func">introspect</span>()</code></pre>
     </div>
   </section>
 
-  <footer class="py-12 border-t border-white/5">
-    <div class="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-      <p class="text-sm text-gray-500">Built by ELO from <a href="https://zedigital.tech" target="_blank" rel="noopener noreferrer" class="text-gray-400 hover:text-accent transition-colors">Z.E Digital Tech</a></p>
-      <div class="flex items-center gap-4">
-        <a href="https://github.com/ezekaj/agielo" target="_blank" rel="noopener noreferrer" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">GitHub</a>
-        <a href="https://zedigital.tech" target="_blank" rel="noopener noreferrer" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">Portfolio</a>
+
+  <!-- ==================== BIBLIOGRAPHY ==================== -->
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-8">References</h2>
+
+    <ol class="space-y-4 text-sm text-gray-700 leading-relaxed list-none">
+      <li class="reference font-serif">
+        <span class="text-navy font-semibold">[1]</span> Baars, B.J. (1988). <em>"A Cognitive Theory of Consciousness."</em> Cambridge University Press.
+      </li>
+      <li class="reference font-serif">
+        <span class="text-navy font-semibold">[2]</span> Friston, K. (2010). <em>"The Free-Energy Principle: A Unified Brain Theory?"</em> Nature Reviews Neuroscience, 11(2), 127&ndash;138.
+      </li>
+      <li class="reference font-serif">
+        <span class="text-navy font-semibold">[3]</span> Kahneman, D. (2011). <em>"Thinking, Fast and Slow."</em> Farrar, Straus and Giroux.
+      </li>
+      <li class="reference font-serif">
+        <span class="text-navy font-semibold">[4]</span> Damasio, A.R. (1994). <em>"Descartes' Error: Emotion, Reason, and the Human Brain."</em> G.P. Putnam's Sons.
+      </li>
+      <li class="reference font-serif">
+        <span class="text-navy font-semibold">[5]</span> Dehaene, S. (2014). <em>"Consciousness and the Brain: Deciphering How the Brain Codes Our Thoughts."</em> Viking Press.
+      </li>
+    </ol>
+  </section>
+
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+        <div class="flex items-center gap-4">
+          <span>MIT License</span>
+          <span class="text-gray-300">|</span>
+          <button id="citeBtn" class="hover:text-navy transition-colors cursor-pointer">Cite This Work</button>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="hover:text-navy transition-colors">GitHub</a>
+          <span class="text-gray-300">|</span>
+          <a href="https://zedigital.tech" target="_blank" class="hover:text-navy transition-colors">Portfolio</a>
+        </div>
+        <div>Built by Z.E Digital Tech</div>
       </div>
     </div>
   </footer>
+
+
+  <!-- ==================== BIBTEX POPUP ==================== -->
+  <div id="bibtexPopup" class="bibtex-popup">
+    <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-lg max-w-lg mx-4 relative">
+      <button id="closeBibtex" class="absolute top-3 right-3 text-gray-400 hover:text-navy text-xl leading-none">&times;</button>
+      <h3 class="font-serif text-lg font-bold text-navy mb-3">BibTeX Citation</h3>
+      <pre class="bg-slate-50 border border-gray-200 rounded p-4 text-xs font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap">@software{agielo2025,
+  title     = {Human Cognition AI (AGiELO):
+               A Neuroscience-Based Cognitive Architecture},
+  author    = {Z.E Digital Tech},
+  year      = {2025},
+  url       = {https://github.com/ezekaj/agielo},
+  license   = {MIT},
+  note      = {15+ cognitive modules implementing
+               brain-realistic cognition}
+}</pre>
+      <button id="copyBibtex" class="mt-3 px-4 py-1.5 bg-accent text-white text-xs font-medium rounded hover:bg-accent-hover transition-colors">Copy to Clipboard</button>
+    </div>
+  </div>
+
+
+  <!-- ==================== JAVASCRIPT ==================== -->
+  <script>
+    // ---- Module data for periodic table ----
+    const modules = [
+      // Foundation (blue)
+      { num: 1,  abbr: 'PC', name: 'Predictive Coding',   cat: 'foundation', desc: 'Hierarchical prediction error minimization following Karl Friston\'s free-energy principle. Generates top-down predictions and computes bottom-up prediction errors across cortical layers.', basis: 'Based on: Friston (2010), Rao & Ballard (1999)' },
+      { num: 2,  abbr: 'MS', name: 'Memory Systems',      cat: 'foundation', desc: 'Four-store memory architecture: episodic memory (hippocampus-inspired), semantic memory (cortical networks), procedural memory (basal ganglia), and working memory (prefrontal buffer). Supports encoding, consolidation, and retrieval.', basis: 'Based on: Tulving (1985), Baddeley (2000)' },
+      { num: 3,  abbr: 'WM', name: 'Working Memory',      cat: 'foundation', desc: 'Capacity-limited active maintenance buffer implementing the phonological loop, visuospatial sketchpad, and central executive. Supports chunking and attentional refresh.', basis: 'Based on: Baddeley & Hitch (1974)' },
+      { num: 4,  abbr: 'PM', name: 'Procedural Memory',   cat: 'foundation', desc: 'Skill and habit learning through reinforcement. Stores action sequences as compiled productions that execute automatically with practice.', basis: 'Based on: Anderson (1982), Squire (2004)' },
+      { num: 5,  abbr: 'PR', name: 'Perception',          cat: 'foundation', desc: 'Multi-modal sensory processing with hierarchical feature extraction. Integrates top-down predictions with bottom-up sensory signals to construct perceptual representations.', basis: 'Based on: Marr (1982), Helmholtz (1867)' },
+
+      // Processing (green)
+      { num: 6,  abbr: 'DP', name: 'Dual Process',        cat: 'processing', desc: 'System 1 (fast, intuitive, automatic) and System 2 (slow, deliberate, effortful) thinking with dynamic switching based on task demands, novelty detection, and cognitive load.', basis: 'Based on: Kahneman (2011), Evans (2003)' },
+      { num: 7,  abbr: 'EF', name: 'Executive Function',  cat: 'processing', desc: 'Cognitive control including task switching, inhibitory control, and working memory updating. Coordinates other modules and resolves conflicts between competing processes.', basis: 'Based on: Miyake et al. (2000), Miller & Cohen (2001)' },
+      { num: 8,  abbr: 'DM', name: 'Decision Making',     cat: 'processing', desc: 'Multi-criteria decision evaluation using expected utility, prospect theory weighting, and satisficing. Integrates emotional valence through somatic markers.', basis: 'Based on: Damasio (1994), Tversky & Kahneman (1992)' },
+      { num: 9,  abbr: 'AT', name: 'Attention',           cat: 'processing', desc: 'Selective, sustained, and divided attention mechanisms. Implements both bottom-up salience-driven and top-down goal-directed attention with competition resolution.', basis: 'Based on: Posner & Petersen (1990), Desimone & Duncan (1995)' },
+      { num: 10, abbr: 'RS', name: 'Reasoning',           cat: 'processing', desc: 'Deductive, inductive, and abductive reasoning engines. Supports logical inference, probabilistic reasoning, and analogical mapping across domains.', basis: 'Based on: Johnson-Laird (1983), Gentner (1983)' },
+
+      // Motivation (yellow)
+      { num: 11, abbr: 'CU', name: 'Curiosity',           cat: 'motivation', desc: 'Information-gap detection and intrinsic motivation to explore. Balances novelty-seeking with information gain optimization using prediction error as a reward signal.', basis: 'Based on: Berlyne (1960), Loewenstein (1994)' },
+      { num: 12, abbr: 'EM', name: 'Emotion',             cat: 'motivation', desc: 'Dimensional emotion modeling (valence, arousal, dominance) with somatic markers that bias cognition. Implements basic emotions, mood states, and affective forecasting.', basis: 'Based on: Damasio (1994), Russell (2003)' },
+      { num: 13, abbr: 'SA', name: 'Self-Awareness',      cat: 'motivation', desc: 'Recursive self-modeling with metacognitive monitoring. Tracks confidence, detects errors, and adjusts cognitive strategies. Maintains a dynamic self-model.', basis: 'Based on: Flavell (1979), Fleming et al. (2012)' },
+      { num: 14, abbr: 'GL', name: 'Goal Management',     cat: 'motivation', desc: 'Hierarchical goal decomposition, prioritization, and progress monitoring. Manages goal conflicts, subgoal generation, and dynamic reprioritization based on context.', basis: 'Based on: Carver & Scheier (1998), Austin & Vancouver (1996)' },
+      { num: 15, abbr: 'MO', name: 'Motivation',          cat: 'motivation', desc: 'Drive system integrating homeostatic needs, incentive salience, and intrinsic motivation. Computes motivational intensity and direction for behavior selection.', basis: 'Based on: Hull (1943), Berridge (2004)' },
+
+      // Interface (amber)
+      { num: 16, abbr: 'LG', name: 'Language',            cat: 'interface', desc: 'Natural language processing including parsing, semantic interpretation, pragmatic reasoning, and generation. Supports context-dependent meaning construction and discourse tracking.', basis: 'Based on: Chomsky (1957), Tomasello (2003)' },
+      { num: 17, abbr: 'SC', name: 'Social Cognition',    cat: 'interface', desc: 'Social norm understanding, reputation tracking, and cooperative behavior modeling. Enables navigation of social environments and group dynamics.', basis: 'Based on: Tomasello (2009), Dunbar (1998)' },
+      { num: 18, abbr: 'EC', name: 'Embodied Cognition',  cat: 'interface', desc: 'Sensorimotor grounding of abstract concepts. Maintains body schema representations and couples cognition with simulated environmental interaction.', basis: 'Based on: Barsalou (1999), Clark (1997)' },
+      { num: 19, abbr: 'TM', name: 'Theory of Mind',      cat: 'interface', desc: 'Mental state attribution for modeling beliefs, desires, and intentions of other agents. Supports perspective-taking and strategic social reasoning.', basis: 'Based on: Premack & Woodruff (1978), Baron-Cohen (1995)' },
+
+      // Advanced (orange)
+      { num: 20, abbr: 'CR', name: 'Creativity',          cat: 'advanced', desc: 'Divergent thought generation through conceptual blending, analogical mapping, and constraint relaxation. Evaluates novelty and usefulness of generated ideas.', basis: 'Based on: Fauconnier & Turner (2002), Boden (2004)' },
+      { num: 21, abbr: 'SL', name: 'Sleep Consolidation', cat: 'advanced', desc: 'Offline memory replay and synaptic homeostasis simulation. Consolidates episodic memories into semantic knowledge and prunes weak connections.', basis: 'Based on: Tononi & Cirelli (2006), Diekelmann & Born (2010)' },
+      { num: 22, abbr: 'TP', name: 'Time Perception',     cat: 'advanced', desc: 'Internal clock mechanisms for duration estimation, temporal ordering, and prospective time management. Supports planning over multiple time horizons.', basis: 'Based on: Treisman (1963), Block & Zakay (1997)' },
+      { num: 23, abbr: 'CB', name: 'Conceptual Blending', cat: 'advanced', desc: 'Cross-domain mapping and integration of mental spaces to generate novel conceptual structures. Enables metaphorical thinking and creative problem solving.', basis: 'Based on: Fauconnier & Turner (2002), Koestler (1964)' },
+    ];
+
+    const catStyles = {
+      foundation: { tile: 'tile-foundation', badge: 'bg-blue-100 text-blue-800' },
+      processing: { tile: 'tile-processing', badge: 'bg-green-100 text-green-800' },
+      motivation: { tile: 'tile-motivation', badge: 'bg-yellow-100 text-yellow-800' },
+      interface:  { tile: 'tile-interface',  badge: 'bg-amber-100 text-amber-800' },
+      advanced:   { tile: 'tile-advanced',   badge: 'bg-orange-100 text-orange-800' },
+    };
+
+    const catLabels = {
+      foundation: 'Foundation',
+      processing: 'Processing',
+      motivation: 'Motivation',
+      interface: 'Interface',
+      advanced: 'Advanced',
+    };
+
+    // Build periodic table grid
+    const grid = document.getElementById('moduleGrid');
+    let activeTile = null;
+
+    modules.forEach((mod, idx) => {
+      const tile = document.createElement('div');
+      tile.className = `module-tile ${catStyles[mod.cat].tile}`;
+      tile.innerHTML = `<span class="tile-num">${mod.num}</span><span class="tile-abbr">${mod.abbr}</span>`;
+      tile.title = mod.name;
+      tile.setAttribute('data-idx', idx);
+      tile.addEventListener('click', () => selectModule(idx, tile));
+      grid.appendChild(tile);
+    });
+
+    function selectModule(idx, tileEl) {
+      const mod = modules[idx];
+      const panel = document.getElementById('modulePanel');
+      const badge = document.getElementById('panelBadge');
+      const title = document.getElementById('panelTitle');
+      const desc = document.getElementById('panelDesc');
+      const basis = document.getElementById('panelBasis');
+
+      // Remove active from previous
+      if (activeTile) activeTile.classList.remove('active');
+      tileEl.classList.add('active');
+      activeTile = tileEl;
+
+      badge.className = `inline-block px-2 py-0.5 rounded text-xs font-semibold ${catStyles[mod.cat].badge}`;
+      badge.textContent = catLabels[mod.cat];
+      title.textContent = mod.name;
+      desc.textContent = mod.desc;
+      basis.textContent = mod.basis;
+
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+
+    // ---- Architecture layer expand/collapse ----
+    document.querySelectorAll('.arch-layer').forEach(layer => {
+      const header = layer.querySelector(':scope > .flex');
+      if (header) {
+        header.addEventListener('click', (e) => {
+          e.stopPropagation();
+          layer.classList.toggle('expanded');
+          const chevron = layer.querySelector(':scope > .flex .arch-chevron');
+          if (chevron) {
+            chevron.style.transform = layer.classList.contains('expanded') ? 'rotate(180deg)' : 'rotate(0deg)';
+          }
+        });
+      }
+    });
+
+
+    // ---- Mobile hamburger ----
+    document.getElementById('hamburger').addEventListener('click', () => {
+      document.getElementById('mobileMenu').classList.toggle('open');
+    });
+
+    // Close mobile menu on link click
+    document.querySelectorAll('#mobileMenu a').forEach(link => {
+      link.addEventListener('click', () => {
+        document.getElementById('mobileMenu').classList.remove('open');
+      });
+    });
+
+
+    // ---- BibTeX popup ----
+    document.getElementById('citeBtn').addEventListener('click', () => {
+      document.getElementById('bibtexPopup').classList.add('show');
+    });
+    document.getElementById('closeBibtex').addEventListener('click', () => {
+      document.getElementById('bibtexPopup').classList.remove('show');
+    });
+    document.getElementById('bibtexPopup').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) {
+        document.getElementById('bibtexPopup').classList.remove('show');
+      }
+    });
+    document.getElementById('copyBibtex').addEventListener('click', () => {
+      const bibtex = document.querySelector('#bibtexPopup pre').textContent;
+      navigator.clipboard.writeText(bibtex).then(() => {
+        const btn = document.getElementById('copyBibtex');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
+      });
+    });
+
+
+    // ---- Smooth scroll for anchor links ----
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function(e) {
+        const targetId = this.getAttribute('href');
+        if (targetId === '#') return;
+        e.preventDefault();
+        const target = document.querySelector(targetId);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
 
 </body>
 </html>
