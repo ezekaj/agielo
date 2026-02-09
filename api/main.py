@@ -12,11 +12,12 @@ from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from api.simulator import simulator, PHASES, MODULE_DEFINITIONS, SCENARIOS
+from api.simulator import simulator, PHASES, MODULE_DEFINITIONS, SCENARIOS, _serialize
 
 app = FastAPI(
     title="Human Cognition AI",
@@ -108,13 +109,13 @@ async def info():
 async def get_modules():
     simulator._ensure_agent()
     modules = simulator.get_modules()
-    return {"modules": modules, "count": len(modules)}
+    return JSONResponse(content=_serialize({"modules": modules, "count": len(modules)}))
 
 
 @app.get("/api/phases")
 async def get_phases():
     phases = simulator.get_phases()
-    return {"phases": phases, "count": len(phases)}
+    return JSONResponse(content=_serialize({"phases": phases, "count": len(phases)}))
 
 
 @app.post("/api/simulate")
@@ -122,7 +123,7 @@ async def simulate(request: SimulateRequest):
     result = simulator.simulate(request.scenario, request.parameters)
     if "error" in result:
         raise HTTPException(status_code=400, detail=result)
-    return result
+    return JSONResponse(content=_serialize(result))
 
 
 @app.post("/api/chat")
@@ -130,7 +131,7 @@ async def chat(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     result = simulator.chat(request.message, request.history)
-    return result
+    return JSONResponse(content=_serialize(result))
 
 
 @app.post("/api/analyze")
@@ -138,7 +139,7 @@ async def analyze(request: AnalyzeRequest):
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
     result = simulator.analyze_text(request.text, request.lenses)
-    return result
+    return JSONResponse(content=_serialize(result))
 
 
 if __name__ == "__main__":

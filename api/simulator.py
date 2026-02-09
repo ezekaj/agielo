@@ -188,19 +188,30 @@ SCENARIOS = {
 
 
 def _serialize(obj: Any) -> Any:
+    if obj is None:
+        return None
     if isinstance(obj, np.ndarray):
         return obj.tolist()
-    if isinstance(obj, np.floating):
+    if isinstance(obj, (np.floating, np.float32, np.float64)):
         return float(obj)
-    if isinstance(obj, np.integer):
+    if isinstance(obj, (np.integer, np.int32, np.int64)):
         return int(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
     if isinstance(obj, dict):
-        return {k: _serialize(v) for k, v in obj.items()}
+        return {str(k): _serialize(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_serialize(v) for v in obj]
-    if hasattr(obj, '__dict__'):
+    if isinstance(obj, (set, frozenset)):
+        return [_serialize(v) for v in obj]
+    if hasattr(obj, 'tolist'):
+        return obj.tolist()
+    try:
         return str(obj)
-    return obj
+    except Exception:
+        return None
 
 
 class CognitiveSimulator:
