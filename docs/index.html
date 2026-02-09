@@ -43,7 +43,6 @@
       font-family: Georgia, Cambria, 'Times New Roman', serif;
     }
 
-    /* Architecture diagram layers */
     .arch-layer {
       cursor: pointer;
       transition: all 0.3s ease;
@@ -62,7 +61,6 @@
       padding-top: 12px;
     }
 
-    /* Periodic table tiles */
     .module-tile {
       width: 64px;
       height: 64px;
@@ -98,34 +96,29 @@
       margin-bottom: 2px;
     }
 
-    /* Tile colors */
     .tile-foundation { background: #DBEAFE; color: #1E40AF; }
     .tile-processing { background: #DCFCE7; color: #166534; }
     .tile-motivation { background: #FEF9C3; color: #854D0E; }
     .tile-interface { background: #FEF3C7; color: #92400E; }
     .tile-advanced { background: #FFEDD5; color: #9A3412; }
 
-    /* Code block syntax highlighting */
     .code-keyword { color: #2563EB; }
     .code-string { color: #F97316; }
     .code-comment { color: #9CA3AF; }
     .code-func { color: #0A0F1A; font-weight: 500; }
     .code-number { color: #7C3AED; }
 
-    /* Table styling */
     .comparison-table th {
       font-family: Georgia, Cambria, serif;
       font-weight: 600;
       font-size: 0.875rem;
     }
 
-    /* Hanging indent for bibliography */
     .reference {
       padding-left: 2.5rem;
       text-indent: -2.5rem;
     }
 
-    /* BibTeX popup */
     .bibtex-popup {
       display: none;
       position: fixed;
@@ -139,12 +132,10 @@
       display: flex;
     }
 
-    /* Smooth scrollbar */
     ::-webkit-scrollbar { width: 8px; }
     ::-webkit-scrollbar-track { background: #F1F5F9; }
     ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 
-    /* Mobile hamburger */
     .mobile-menu {
       max-height: 0;
       overflow: hidden;
@@ -152,6 +143,117 @@
     }
     .mobile-menu.open {
       max-height: 300px;
+    }
+
+    /* Simulator Styles */
+    @keyframes pulseGlow {
+      0%, 100% { filter: brightness(1) drop-shadow(0 0 2px currentColor); }
+      50% { filter: brightness(1.4) drop-shadow(0 0 12px currentColor); }
+    }
+    @keyframes flowDash {
+      to { stroke-dashoffset: -20; }
+    }
+    @keyframes moduleActivate {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+      100% { transform: scale(1); }
+    }
+
+    .sim-module {
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .sim-module:hover {
+      filter: brightness(1.15) drop-shadow(0 0 6px rgba(249,115,22,0.4));
+    }
+    .sim-module.active-module {
+      animation: moduleActivate 0.4s ease;
+    }
+    .sim-module .idle-glow {
+      opacity: 0.4;
+      transition: opacity 0.3s ease;
+    }
+    .sim-module.lit .idle-glow {
+      opacity: 1;
+    }
+    .sim-module.lit {
+      filter: brightness(1.3) drop-shadow(0 0 14px currentColor);
+    }
+
+    .flow-arrow {
+      stroke-dasharray: 8 4;
+      stroke-dashoffset: 0;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .flow-arrow.active-flow {
+      opacity: 1;
+      animation: flowDash 0.6s linear infinite;
+    }
+
+    .sim-log-entry {
+      opacity: 0;
+      transform: translateY(8px);
+      transition: all 0.3s ease;
+    }
+    .sim-log-entry.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .inspector-panel {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+    .inspector-panel.open {
+      max-height: 600px;
+      opacity: 1;
+    }
+
+    .scenario-card {
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 2px solid transparent;
+    }
+    .scenario-card:hover {
+      border-color: #F97316;
+      box-shadow: 0 2px 8px rgba(249,115,22,0.15);
+    }
+    .scenario-card.selected {
+      border-color: #F97316;
+      background: #FFF7ED;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: #E2E8F0;
+      border-radius: 3px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #F97316;
+      cursor: pointer;
+    }
+
+    .results-bar {
+      height: 8px;
+      border-radius: 4px;
+      background: #E2E8F0;
+      overflow: hidden;
+    }
+    .results-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.6s ease;
     }
   </style>
 </head>
@@ -166,12 +268,13 @@
         <div class="hidden md:flex items-center gap-8">
           <a href="#architecture" class="text-sm text-gray-600 hover:text-navy transition-colors">Architecture</a>
           <a href="#modules" class="text-sm text-gray-600 hover:text-navy transition-colors">Modules</a>
+          <a href="#simulator" class="text-sm text-gray-600 hover:text-navy transition-colors">Simulator</a>
           <a href="#research" class="text-sm text-gray-600 hover:text-navy transition-colors">Research</a>
           <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
         </div>
 
         <div class="hidden md:block">
-          <a href="#" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Run Examples</a>
+          <a href="#simulator" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Run Simulation</a>
         </div>
 
         <button id="hamburger" class="md:hidden p-2 text-gray-600 hover:text-navy" aria-label="Toggle menu">
@@ -185,9 +288,10 @@
         <div class="py-3 border-t border-gray-100 space-y-2">
           <a href="#architecture" class="block text-sm text-gray-600 py-1.5">Architecture</a>
           <a href="#modules" class="block text-sm text-gray-600 py-1.5">Modules</a>
+          <a href="#simulator" class="block text-sm text-gray-600 py-1.5">Simulator</a>
           <a href="#research" class="block text-sm text-gray-600 py-1.5">Research</a>
           <a href="https://github.com/ezekaj/agielo" target="_blank" class="block text-sm text-gray-600 py-1.5">GitHub</a>
-          <a href="#" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded mt-1">Run Examples</a>
+          <a href="#simulator" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded mt-1">Run Simulation</a>
         </div>
       </div>
     </div>
@@ -214,8 +318,8 @@
     </div>
 
     <div class="mt-8 flex items-center gap-6">
-      <a href="#" class="inline-block px-6 py-2.5 bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors shadow-sm">
-        Run Examples
+      <a href="#simulator" class="inline-block px-6 py-2.5 bg-accent text-white font-medium rounded hover:bg-accent-hover transition-colors shadow-sm">
+        Run Simulation
       </a>
       <a href="#research" class="text-accent font-medium hover:underline">
         Read the Comparison &rarr;
@@ -315,19 +419,14 @@
                   </div>
                 </div>
               </div>
-              <!-- End Phase 1 -->
 
             </div>
-            <!-- End Phase 2 -->
 
           </div>
-          <!-- End Phase 3 -->
 
         </div>
-        <!-- End Phase 4 -->
 
       </div>
-      <!-- End Phase 5 -->
     </div>
   </section>
 
@@ -337,7 +436,6 @@
     <h2 class="font-serif text-3xl font-bold text-navy mb-2">The Modules</h2>
     <p class="text-gray-500 mb-8">Each cognitive module maps to neuroscience research. Click any tile to explore.</p>
 
-    <!-- Legend -->
     <div class="flex flex-wrap gap-4 mb-8 text-xs font-medium">
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-blue-100 border border-blue-200 inline-block"></span> Foundation</div>
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-100 border border-green-200 inline-block"></span> Processing</div>
@@ -346,10 +444,8 @@
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-orange-100 border border-orange-200 inline-block"></span> Advanced</div>
     </div>
 
-    <!-- Tile Grid -->
     <div id="moduleGrid" class="flex flex-wrap gap-2 justify-center sm:justify-start"></div>
 
-    <!-- Description Panel -->
     <div id="modulePanel" class="mt-6 hidden">
       <div class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
         <div class="flex items-center gap-3 mb-2">
@@ -358,6 +454,237 @@
         </div>
         <p id="panelDesc" class="text-gray-600 leading-relaxed text-sm"></p>
         <p id="panelBasis" class="text-gray-400 text-xs mt-3 italic"></p>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== COGNITIVE SIMULATOR ==================== -->
+  <section id="simulator" class="w-full bg-white border-y border-gray-200 py-16">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="max-w-4xl">
+        <h2 class="font-serif text-3xl font-bold text-navy mb-2">Run a Simulation</h2>
+        <p class="text-gray-500 mb-10">Select a cognitive scenario and observe how information flows through the architecture in real time. Click any module in the brain diagram to inspect its properties.</p>
+      </div>
+
+      <div class="grid lg:grid-cols-5 gap-8">
+        <!-- Left: Brain Diagram + Controls -->
+        <div class="lg:col-span-3">
+          <!-- SVG Brain Diagram -->
+          <div class="bg-slate-50 border border-gray-200 rounded-xl p-4 sm:p-6 mb-6 relative overflow-hidden">
+            <svg id="brainSVG" viewBox="0 0 500 500" class="w-full max-w-lg mx-auto" style="max-height:500px;">
+              <defs>
+                <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#22C55E" flood-opacity="0.5" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowBlue" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#3B82F6" flood-opacity="0.5" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#EF4444" flood-opacity="0.5" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowPurple" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#A855F7" flood-opacity="0.5" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowOrange" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#F97316" flood-opacity="0.6" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <filter id="glowYellow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="4" result="blur"/>
+                  <feFlood flood-color="#EAB308" flood-opacity="0.5" result="color"/>
+                  <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+                  <feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+                <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+                  <path d="M0,0 L8,3 L0,6" fill="#F97316"/>
+                </marker>
+              </defs>
+
+              <!-- Flow arrows (hidden until simulation) -->
+              <g id="flowArrows">
+                <!-- Arrows are drawn dynamically -->
+              </g>
+
+              <!-- Outer ring: Sensory/Motor (green) -->
+              <g class="sim-module" data-module="sensory" onclick="inspectModule('sensory')">
+                <circle cx="250" cy="250" r="230" fill="none" stroke="#22C55E" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <circle cx="250" cy="250" r="230" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <!-- Sensory Input label (top) -->
+                <rect x="185" y="12" width="130" height="28" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+                <text x="250" y="31" text-anchor="middle" font-size="11" font-weight="600" fill="#166534" font-family="Inter, sans-serif">Sensory Input</text>
+                <!-- Motor Output label (bottom) -->
+                <rect x="185" y="460" width="130" height="28" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+                <text x="250" y="479" text-anchor="middle" font-size="11" font-weight="600" fill="#166534" font-family="Inter, sans-serif">Motor Output</text>
+              </g>
+
+              <!-- Second ring: Memory (blue, left), Emotions (red, right), Language (purple, top-right) -->
+              <!-- Memory module (left arc) -->
+              <g class="sim-module" data-module="memory" onclick="inspectModule('memory')">
+                <path d="M 80,250 A 170,170 0 0,1 250,80" fill="none" stroke="#3B82F6" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 80,250 A 170,170 0 0,1 250,80" fill="none" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="52" y="135" width="110" height="46" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="107" y="155" text-anchor="middle" font-size="10" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+                <text x="107" y="170" text-anchor="middle" font-size="8" fill="#3B82F6" font-family="Inter, sans-serif">Ep / Sem / WM</text>
+              </g>
+
+              <!-- Emotion module (right) -->
+              <g class="sim-module" data-module="emotion" onclick="inspectModule('emotion')">
+                <path d="M 420,250 A 170,170 0 0,1 250,420" fill="none" stroke="#EF4444" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 420,250 A 170,170 0 0,1 250,420" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="360" y="290" width="110" height="46" rx="8" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+                <text x="415" y="310" text-anchor="middle" font-size="10" font-weight="600" fill="#991B1B" font-family="Inter, sans-serif">Emotion Engine</text>
+                <text x="415" y="325" text-anchor="middle" font-size="8" fill="#EF4444" font-family="Inter, sans-serif">Amygdala / Somatic</text>
+              </g>
+
+              <!-- Language module (top-right) -->
+              <g class="sim-module" data-module="language" onclick="inspectModule('language')">
+                <path d="M 250,80 A 170,170 0 0,1 420,250" fill="none" stroke="#A855F7" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 250,80 A 170,170 0 0,1 420,250" fill="none" stroke="#A855F7" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="355" y="120" width="120" height="46" rx="8" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5"/>
+                <text x="415" y="140" text-anchor="middle" font-size="10" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Language</text>
+                <text x="415" y="155" text-anchor="middle" font-size="8" fill="#A855F7" font-family="Inter, sans-serif">Parse / Generate</text>
+              </g>
+
+              <!-- Dual Process module (bottom-left) -->
+              <g class="sim-module" data-module="dualprocess" onclick="inspectModule('dualprocess')">
+                <path d="M 250,420 A 170,170 0 0,1 80,250" fill="none" stroke="#EAB308" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 250,420 A 170,170 0 0,1 80,250" fill="none" stroke="#EAB308" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="40" y="310" width="120" height="46" rx="8" fill="#FEFCE8" stroke="#EAB308" stroke-width="1.5"/>
+                <text x="100" y="330" text-anchor="middle" font-size="10" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Dual Process</text>
+                <text x="100" y="345" text-anchor="middle" font-size="8" fill="#EAB308" font-family="Inter, sans-serif">Sys 1 / Sys 2</text>
+              </g>
+
+              <!-- Inner core: Executive / Global Workspace (orange) -->
+              <g class="sim-module" data-module="executive" onclick="inspectModule('executive')">
+                <circle cx="250" cy="250" r="80" fill="#FFF7ED" stroke="#F97316" stroke-width="2.5" opacity="0.8"/>
+                <circle cx="250" cy="250" r="80" fill="none" stroke="#F97316" stroke-width="1" opacity="0.3" class="idle-glow"/>
+                <text x="250" y="240" text-anchor="middle" font-size="12" font-weight="700" fill="#9A3412" font-family="Inter, sans-serif">Global</text>
+                <text x="250" y="256" text-anchor="middle" font-size="12" font-weight="700" fill="#9A3412" font-family="Inter, sans-serif">Workspace</text>
+                <text x="250" y="274" text-anchor="middle" font-size="9" fill="#F97316" font-family="Inter, sans-serif">Executive Control</text>
+              </g>
+
+              <!-- Working Memory (small node, between memory and executive) -->
+              <g class="sim-module" data-module="working_memory" onclick="inspectModule('working_memory')">
+                <circle cx="155" cy="200" r="28" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="155" y="197" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Working</text>
+                <text x="155" y="209" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+              </g>
+
+              <!-- Decision module (small node, between dualprocess and executive) -->
+              <g class="sim-module" data-module="decision" onclick="inspectModule('decision')">
+                <circle cx="170" cy="320" r="28" fill="#FEFCE8" stroke="#EAB308" stroke-width="1.5"/>
+                <text x="170" y="318" text-anchor="middle" font-size="8" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Decision</text>
+                <text x="170" y="330" text-anchor="middle" font-size="8" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Module</text>
+              </g>
+
+              <!-- Amygdala (small node, near emotion, for fast danger path) -->
+              <g class="sim-module" data-module="amygdala" onclick="inspectModule('amygdala')">
+                <circle cx="340" cy="350" r="24" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+                <text x="340" y="353" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B" font-family="Inter, sans-serif">Amygdala</text>
+              </g>
+
+              <!-- Long-term Memory (small node, top-left) -->
+              <g class="sim-module" data-module="longterm_memory" onclick="inspectModule('longterm_memory')">
+                <circle cx="120" cy="100" r="28" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="120" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Long-term</text>
+                <text x="120" y="109" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+              </g>
+
+              <!-- Cortical Processing (small node, top-right near language) -->
+              <g class="sim-module" data-module="cortical" onclick="inspectModule('cortical')">
+                <circle cx="330" cy="150" r="28" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5"/>
+                <text x="330" y="147" text-anchor="middle" font-size="8" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Cortical</text>
+                <text x="330" y="159" text-anchor="middle" font-size="8" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Processing</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- Scenario Selector -->
+          <div class="mb-4">
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Select a Scenario</h3>
+            <div class="grid sm:grid-cols-2 gap-3" id="scenarioCards">
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm selected" data-scenario="0">
+                <div class="text-sm font-semibold text-navy mb-1">Process a Sentence</div>
+                <div class="text-xs text-gray-500">"The cat sat on the mat" -- sensory to comprehension</div>
+                <div class="text-xs text-accent mt-1 font-medium">~3.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="1">
+                <div class="text-sm font-semibold text-navy mb-1">Recall a Memory</div>
+                <div class="text-xs text-gray-500">Childhood memory retrieval with emotional coloring</div>
+                <div class="text-xs text-accent mt-1 font-medium">~4.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="2">
+                <div class="text-sm font-semibold text-navy mb-1">Financial Decision</div>
+                <div class="text-xs text-gray-500">System 1 vs System 2 conflict in decision-making</div>
+                <div class="text-xs text-accent mt-1 font-medium">~5.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="3">
+                <div class="text-sm font-semibold text-navy mb-1">Learn a New Word</div>
+                <div class="text-xs text-gray-500">Language acquisition through memory encoding</div>
+                <div class="text-xs text-accent mt-1 font-medium">~3.5s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm sm:col-span-2" data-scenario="4">
+                <div class="text-sm font-semibold text-navy mb-1">Respond to Danger</div>
+                <div class="text-xs text-gray-500">Amygdala fast-path bypassing cortex, fight-or-flight response</div>
+                <div class="text-xs text-accent mt-1 font-medium">~2.0s (fast!)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Run Button -->
+          <button id="runSimBtn" class="w-full sm:w-auto px-8 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors shadow-sm text-base">
+            Run Simulation
+          </button>
+        </div>
+
+        <!-- Right: Log + Inspector + Results -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+          <!-- Processing Log -->
+          <div>
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Processing Log</h3>
+            <div id="simLog" class="bg-slate-50 border border-gray-200 rounded-lg p-4 font-mono text-xs leading-relaxed min-h-[200px] max-h-[320px] overflow-y-auto">
+              <div class="text-gray-400 italic">Select a scenario and click "Run Simulation" to begin.</div>
+            </div>
+          </div>
+
+          <!-- Module Inspector -->
+          <div>
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Module Inspector</h3>
+            <div id="inspectorPanel" class="inspector-panel bg-white border border-gray-200 rounded-lg shadow-sm">
+              <!-- Filled dynamically -->
+            </div>
+            <div id="inspectorPlaceholder" class="bg-slate-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-400 italic">
+              Click any module in the brain diagram to inspect its parameters and connections.
+            </div>
+          </div>
+
+          <!-- Results Panel -->
+          <div id="resultsPanel" class="hidden">
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Results</h3>
+            <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-4">
+              <div id="resultsTimings" class="space-y-2"></div>
+              <hr class="border-gray-100">
+              <div id="resultsThought" class="text-sm text-gray-700 leading-relaxed"></div>
+              <hr class="border-gray-100">
+              <div id="resultsComparison" class="text-xs text-gray-500 bg-slate-50 rounded p-3 font-mono"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -516,6 +843,57 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
   </section>
 
 
+  <!-- ==================== SUPPORT THIS RESEARCH ==================== -->
+  <section id="support" class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <div class="bg-white border border-gray-200 rounded-xl p-8 sm:p-10 shadow-sm">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-2">Support This Research</h2>
+      <p class="text-gray-500 mb-8">An open-source framework for modeling human cognition. If you find this work useful, consider supporting its development.</p>
+
+      <div class="grid md:grid-cols-2 gap-8">
+        <!-- Citation -->
+        <div>
+          <h3 class="font-serif text-lg font-bold text-navy mb-3">Cite This Work</h3>
+          <div class="bg-slate-50 border border-gray-200 rounded-lg p-4 font-mono text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap">@article{zekaj2024humancognition,
+  title={Human Cognition AI: A Computational
+         Framework for Brain-Realistic Cognition},
+  author={Zekaj, Elvi},
+  year={2024},
+  url={https://github.com/ezekaj/agielo},
+  license={MIT}
+}</div>
+          <button id="copyCitation" class="mt-3 px-4 py-1.5 bg-accent text-white text-xs font-medium rounded hover:bg-accent-hover transition-colors">Copy BibTeX</button>
+        </div>
+
+        <!-- Payment Links -->
+        <div>
+          <h3 class="font-serif text-lg font-bold text-navy mb-3">Support Research</h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex items-start gap-3 bg-slate-50 border border-gray-200 rounded-lg p-3">
+              <div class="flex-shrink-0 w-16 font-semibold text-navy">PayPal</div>
+              <a href="https://paypal.me/elvizekaj" target="_blank" class="text-accent hover:underline break-all">paypal.me/elvizekaj</a>
+            </div>
+            <div class="flex items-start gap-3 bg-slate-50 border border-gray-200 rounded-lg p-3">
+              <div class="flex-shrink-0 w-16 font-semibold text-navy">Wise</div>
+              <span class="text-gray-700 break-all">elvizekaj02@gmail.com</span>
+            </div>
+            <div class="flex items-start gap-3 bg-slate-50 border border-gray-200 rounded-lg p-3">
+              <div class="flex-shrink-0 w-16 font-semibold text-navy">Crypto</div>
+              <div class="text-gray-700 text-xs font-mono break-all">
+                <div><span class="text-gray-500">BTC:</span> bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh</div>
+                <div class="mt-1"><span class="text-gray-500">ETH:</span> 0x71C7656EC7ab88b098defB751B7401B5f6d8976F</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-3 bg-slate-50 border border-gray-200 rounded-lg p-3">
+              <div class="flex-shrink-0 w-16 font-semibold text-navy">Email</div>
+              <a href="mailto:elvizekaj02@gmail.com" class="text-accent hover:underline">elvizekaj02@gmail.com</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
   <!-- ==================== FOOTER ==================== -->
   <footer class="border-t border-gray-200 bg-white">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 py-8">
@@ -558,36 +936,29 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
 
   <!-- ==================== JAVASCRIPT ==================== -->
   <script>
-    // ---- Module data for periodic table ----
+    // =====================================================
+    // MODULE DATA (PERIODIC TABLE)
+    // =====================================================
     const modules = [
-      // Foundation (blue)
       { num: 1,  abbr: 'PC', name: 'Predictive Coding',   cat: 'foundation', desc: 'Hierarchical prediction error minimization following Karl Friston\'s free-energy principle. Generates top-down predictions and computes bottom-up prediction errors across cortical layers.', basis: 'Based on: Friston (2010), Rao & Ballard (1999)' },
       { num: 2,  abbr: 'MS', name: 'Memory Systems',      cat: 'foundation', desc: 'Four-store memory architecture: episodic memory (hippocampus-inspired), semantic memory (cortical networks), procedural memory (basal ganglia), and working memory (prefrontal buffer). Supports encoding, consolidation, and retrieval.', basis: 'Based on: Tulving (1985), Baddeley (2000)' },
       { num: 3,  abbr: 'WM', name: 'Working Memory',      cat: 'foundation', desc: 'Capacity-limited active maintenance buffer implementing the phonological loop, visuospatial sketchpad, and central executive. Supports chunking and attentional refresh.', basis: 'Based on: Baddeley & Hitch (1974)' },
       { num: 4,  abbr: 'PM', name: 'Procedural Memory',   cat: 'foundation', desc: 'Skill and habit learning through reinforcement. Stores action sequences as compiled productions that execute automatically with practice.', basis: 'Based on: Anderson (1982), Squire (2004)' },
       { num: 5,  abbr: 'PR', name: 'Perception',          cat: 'foundation', desc: 'Multi-modal sensory processing with hierarchical feature extraction. Integrates top-down predictions with bottom-up sensory signals to construct perceptual representations.', basis: 'Based on: Marr (1982), Helmholtz (1867)' },
-
-      // Processing (green)
       { num: 6,  abbr: 'DP', name: 'Dual Process',        cat: 'processing', desc: 'System 1 (fast, intuitive, automatic) and System 2 (slow, deliberate, effortful) thinking with dynamic switching based on task demands, novelty detection, and cognitive load.', basis: 'Based on: Kahneman (2011), Evans (2003)' },
       { num: 7,  abbr: 'EF', name: 'Executive Function',  cat: 'processing', desc: 'Cognitive control including task switching, inhibitory control, and working memory updating. Coordinates other modules and resolves conflicts between competing processes.', basis: 'Based on: Miyake et al. (2000), Miller & Cohen (2001)' },
       { num: 8,  abbr: 'DM', name: 'Decision Making',     cat: 'processing', desc: 'Multi-criteria decision evaluation using expected utility, prospect theory weighting, and satisficing. Integrates emotional valence through somatic markers.', basis: 'Based on: Damasio (1994), Tversky & Kahneman (1992)' },
       { num: 9,  abbr: 'AT', name: 'Attention',           cat: 'processing', desc: 'Selective, sustained, and divided attention mechanisms. Implements both bottom-up salience-driven and top-down goal-directed attention with competition resolution.', basis: 'Based on: Posner & Petersen (1990), Desimone & Duncan (1995)' },
       { num: 10, abbr: 'RS', name: 'Reasoning',           cat: 'processing', desc: 'Deductive, inductive, and abductive reasoning engines. Supports logical inference, probabilistic reasoning, and analogical mapping across domains.', basis: 'Based on: Johnson-Laird (1983), Gentner (1983)' },
-
-      // Motivation (yellow)
       { num: 11, abbr: 'CU', name: 'Curiosity',           cat: 'motivation', desc: 'Information-gap detection and intrinsic motivation to explore. Balances novelty-seeking with information gain optimization using prediction error as a reward signal.', basis: 'Based on: Berlyne (1960), Loewenstein (1994)' },
       { num: 12, abbr: 'EM', name: 'Emotion',             cat: 'motivation', desc: 'Dimensional emotion modeling (valence, arousal, dominance) with somatic markers that bias cognition. Implements basic emotions, mood states, and affective forecasting.', basis: 'Based on: Damasio (1994), Russell (2003)' },
       { num: 13, abbr: 'SA', name: 'Self-Awareness',      cat: 'motivation', desc: 'Recursive self-modeling with metacognitive monitoring. Tracks confidence, detects errors, and adjusts cognitive strategies. Maintains a dynamic self-model.', basis: 'Based on: Flavell (1979), Fleming et al. (2012)' },
       { num: 14, abbr: 'GL', name: 'Goal Management',     cat: 'motivation', desc: 'Hierarchical goal decomposition, prioritization, and progress monitoring. Manages goal conflicts, subgoal generation, and dynamic reprioritization based on context.', basis: 'Based on: Carver & Scheier (1998), Austin & Vancouver (1996)' },
       { num: 15, abbr: 'MO', name: 'Motivation',          cat: 'motivation', desc: 'Drive system integrating homeostatic needs, incentive salience, and intrinsic motivation. Computes motivational intensity and direction for behavior selection.', basis: 'Based on: Hull (1943), Berridge (2004)' },
-
-      // Interface (amber)
       { num: 16, abbr: 'LG', name: 'Language',            cat: 'interface', desc: 'Natural language processing including parsing, semantic interpretation, pragmatic reasoning, and generation. Supports context-dependent meaning construction and discourse tracking.', basis: 'Based on: Chomsky (1957), Tomasello (2003)' },
       { num: 17, abbr: 'SC', name: 'Social Cognition',    cat: 'interface', desc: 'Social norm understanding, reputation tracking, and cooperative behavior modeling. Enables navigation of social environments and group dynamics.', basis: 'Based on: Tomasello (2009), Dunbar (1998)' },
       { num: 18, abbr: 'EC', name: 'Embodied Cognition',  cat: 'interface', desc: 'Sensorimotor grounding of abstract concepts. Maintains body schema representations and couples cognition with simulated environmental interaction.', basis: 'Based on: Barsalou (1999), Clark (1997)' },
       { num: 19, abbr: 'TM', name: 'Theory of Mind',      cat: 'interface', desc: 'Mental state attribution for modeling beliefs, desires, and intentions of other agents. Supports perspective-taking and strategic social reasoning.', basis: 'Based on: Premack & Woodruff (1978), Baron-Cohen (1995)' },
-
-      // Advanced (orange)
       { num: 20, abbr: 'CR', name: 'Creativity',          cat: 'advanced', desc: 'Divergent thought generation through conceptual blending, analogical mapping, and constraint relaxation. Evaluates novelty and usefulness of generated ideas.', basis: 'Based on: Fauconnier & Turner (2002), Boden (2004)' },
       { num: 21, abbr: 'SL', name: 'Sleep Consolidation', cat: 'advanced', desc: 'Offline memory replay and synaptic homeostasis simulation. Consolidates episodic memories into semantic knowledge and prunes weak connections.', basis: 'Based on: Tononi & Cirelli (2006), Diekelmann & Born (2010)' },
       { num: 22, abbr: 'TP', name: 'Time Perception',     cat: 'advanced', desc: 'Internal clock mechanisms for duration estimation, temporal ordering, and prospective time management. Supports planning over multiple time horizons.', basis: 'Based on: Treisman (1963), Block & Zakay (1997)' },
@@ -632,7 +1003,6 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
       const desc = document.getElementById('panelDesc');
       const basis = document.getElementById('panelBasis');
 
-      // Remove active from previous
       if (activeTile) activeTile.classList.remove('active');
       tileEl.classList.add('active');
       activeTile = tileEl;
@@ -669,7 +1039,6 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
       document.getElementById('mobileMenu').classList.toggle('open');
     });
 
-    // Close mobile menu on link click
     document.querySelectorAll('#mobileMenu a').forEach(link => {
       link.addEventListener('click', () => {
         document.getElementById('mobileMenu').classList.remove('open');
@@ -699,6 +1068,17 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
     });
 
 
+    // ---- Copy citation in support section ----
+    document.getElementById('copyCitation').addEventListener('click', () => {
+      const citationText = document.querySelector('#support .font-mono').textContent;
+      navigator.clipboard.writeText(citationText).then(() => {
+        const btn = document.getElementById('copyCitation');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy BibTeX'; }, 2000);
+      });
+    });
+
+
     // ---- Smooth scroll for anchor links ----
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function(e) {
@@ -711,6 +1091,552 @@ insight = agent.<span class="code-func">introspect</span>()</code></pre>
         }
       });
     });
+
+
+    // =====================================================
+    // COGNITIVE SIMULATOR
+    // =====================================================
+
+    // Module positions (center coordinates in SVG viewBox)
+    const modulePositions = {
+      sensory:         { x: 250, y: 26,  label: 'Sensory Input' },
+      motor:           { x: 250, y: 474, label: 'Motor Output' },
+      memory:          { x: 107, y: 152, label: 'Memory' },
+      emotion:         { x: 415, y: 313, label: 'Emotion Engine' },
+      language:        { x: 415, y: 143, label: 'Language' },
+      dualprocess:     { x: 100, y: 333, label: 'Dual Process' },
+      executive:       { x: 250, y: 250, label: 'Global Workspace' },
+      working_memory:  { x: 155, y: 200, label: 'Working Memory' },
+      decision:        { x: 170, y: 320, label: 'Decision Module' },
+      amygdala:        { x: 340, y: 350, label: 'Amygdala' },
+      longterm_memory: { x: 120, y: 100, label: 'Long-term Memory' },
+      cortical:        { x: 330, y: 150, label: 'Cortical Processing' },
+    };
+
+    // Module metadata for inspector
+    const moduleInfo = {
+      sensory: {
+        name: 'Sensory Input',
+        desc: 'Multi-modal sensory processing interface. Receives raw environmental signals (visual, auditory, tactile) and converts them into internal representations for downstream processing.',
+        role: 'Gateway for all external information entering the cognitive system.',
+        params: [
+          { name: 'Processing Speed', value: 0.15, min: 0.05, max: 0.5, unit: 's', key: 'speed' },
+          { name: 'Sensitivity', value: 0.8, min: 0.1, max: 1.0, unit: '', key: 'sensitivity' },
+        ],
+        connections: ['language', 'memory', 'executive', 'amygdala', 'cortical'],
+        color: '#22C55E',
+      },
+      motor: {
+        name: 'Motor Output',
+        desc: 'Action execution and response generation. Translates cognitive decisions into behavioral output, including speech production, movement planning, and autonomic responses.',
+        role: 'Final output pathway for all behavioral responses.',
+        params: [
+          { name: 'Response Latency', value: 0.2, min: 0.05, max: 0.5, unit: 's', key: 'speed' },
+          { name: 'Precision', value: 0.9, min: 0.3, max: 1.0, unit: '', key: 'precision' },
+        ],
+        connections: ['executive', 'dualprocess', 'amygdala'],
+        color: '#22C55E',
+      },
+      memory: {
+        name: 'Memory Systems',
+        desc: 'Integrated memory architecture combining episodic (event-based), semantic (fact-based), and procedural (skill-based) memory stores with distinct encoding and retrieval mechanisms.',
+        role: 'Stores and retrieves all learned information across multiple memory types.',
+        params: [
+          { name: 'Retrieval Speed', value: 0.3, min: 0.1, max: 0.8, unit: 's', key: 'speed' },
+          { name: 'Capacity', value: 7, min: 3, max: 12, unit: 'items', key: 'capacity' },
+          { name: 'Encoding Strength', value: 0.7, min: 0.2, max: 1.0, unit: '', key: 'encoding' },
+        ],
+        connections: ['executive', 'working_memory', 'emotion', 'language', 'longterm_memory'],
+        color: '#3B82F6',
+      },
+      emotion: {
+        name: 'Emotion Engine',
+        desc: 'Dimensional emotion processing with valence (positive/negative), arousal (calm/excited), and dominance axes. Implements somatic markers that bias decision-making and color memory encoding.',
+        role: 'Provides emotional valence to all cognitive processes, influencing attention and decision quality.',
+        params: [
+          { name: 'Processing Speed', value: 0.25, min: 0.1, max: 0.6, unit: 's', key: 'speed' },
+          { name: 'Reactivity', value: 0.6, min: 0.1, max: 1.0, unit: '', key: 'reactivity' },
+          { name: 'Regulation', value: 0.5, min: 0.1, max: 1.0, unit: '', key: 'regulation' },
+        ],
+        connections: ['executive', 'memory', 'amygdala', 'decision', 'language'],
+        color: '#EF4444',
+      },
+      language: {
+        name: 'Language Processing',
+        desc: 'Full natural language pipeline: phonological analysis, syntactic parsing, semantic interpretation, pragmatic reasoning, and language generation. Supports both comprehension and production.',
+        role: 'Encodes and decodes linguistic information for communication and inner speech.',
+        params: [
+          { name: 'Parse Speed', value: 0.3, min: 0.1, max: 0.6, unit: 's', key: 'speed' },
+          { name: 'Vocabulary Size', value: 50000, min: 10000, max: 100000, unit: 'words', key: 'vocab' },
+        ],
+        connections: ['sensory', 'memory', 'executive', 'cortical'],
+        color: '#A855F7',
+      },
+      dualprocess: {
+        name: 'Dual Process Thinking',
+        desc: 'Implements Kahneman\'s System 1 (fast, automatic, heuristic) and System 2 (slow, deliberate, analytical) thinking. Dynamic switching based on task novelty, difficulty, and available cognitive resources.',
+        role: 'Selects between fast intuitive and slow analytical processing modes.',
+        params: [
+          { name: 'System 1 Speed', value: 0.1, min: 0.05, max: 0.3, unit: 's', key: 'sys1_speed' },
+          { name: 'System 2 Speed', value: 0.8, min: 0.3, max: 2.0, unit: 's', key: 'sys2_speed' },
+          { name: 'Switch Threshold', value: 0.5, min: 0.2, max: 0.9, unit: '', key: 'threshold' },
+        ],
+        connections: ['executive', 'working_memory', 'decision', 'motor'],
+        color: '#EAB308',
+      },
+      executive: {
+        name: 'Global Workspace',
+        desc: 'Central hub implementing Baars\' Global Workspace Theory. Broadcasts information across all modules, enabling conscious awareness and coordinated cognitive processing. Manages attention, task switching, and cognitive control.',
+        role: 'Central coordinator that integrates and broadcasts information across all modules.',
+        params: [
+          { name: 'Broadcast Speed', value: 0.2, min: 0.05, max: 0.5, unit: 's', key: 'speed' },
+          { name: 'Broadcast Capacity', value: 4, min: 1, max: 8, unit: 'streams', key: 'capacity' },
+        ],
+        connections: ['sensory', 'motor', 'memory', 'emotion', 'language', 'dualprocess', 'working_memory', 'decision'],
+        color: '#F97316',
+      },
+      working_memory: {
+        name: 'Working Memory',
+        desc: 'Capacity-limited active maintenance buffer. Holds and manipulates information currently in use. Implements phonological loop, visuospatial sketchpad, and episodic buffer.',
+        role: 'Short-term active storage for items currently being processed.',
+        params: [
+          { name: 'Capacity', value: 7, min: 3, max: 12, unit: 'items', key: 'capacity' },
+          { name: 'Decay Rate', value: 0.3, min: 0.1, max: 0.8, unit: '/s', key: 'decay' },
+        ],
+        connections: ['executive', 'memory', 'dualprocess', 'longterm_memory'],
+        color: '#3B82F6',
+      },
+      decision: {
+        name: 'Decision Module',
+        desc: 'Multi-criteria decision evaluation combining expected utility, prospect theory weighting, and somatic marker integration. Supports satisficing, maximizing, and elimination-by-aspects strategies.',
+        role: 'Evaluates options and selects actions based on integrated cognitive/emotional inputs.',
+        params: [
+          { name: 'Deliberation Time', value: 0.4, min: 0.1, max: 1.0, unit: 's', key: 'speed' },
+          { name: 'Risk Tolerance', value: 0.5, min: 0.0, max: 1.0, unit: '', key: 'risk' },
+        ],
+        connections: ['executive', 'emotion', 'dualprocess', 'motor'],
+        color: '#EAB308',
+      },
+      amygdala: {
+        name: 'Amygdala (Fast Path)',
+        desc: 'Rapid threat-detection circuit that bypasses cortical processing for survival-critical stimuli. Triggers immediate fight-or-flight motor responses while simultaneously routing information to cortex for detailed evaluation.',
+        role: 'Ultra-fast emotional detection for threats, bypassing higher-order processing.',
+        params: [
+          { name: 'Response Speed', value: 0.08, min: 0.03, max: 0.2, unit: 's', key: 'speed' },
+          { name: 'Threat Sensitivity', value: 0.9, min: 0.3, max: 1.0, unit: '', key: 'sensitivity' },
+        ],
+        connections: ['sensory', 'motor', 'emotion', 'cortical'],
+        color: '#EF4444',
+      },
+      longterm_memory: {
+        name: 'Long-term Memory',
+        desc: 'Persistent storage for consolidated memories. Episodic memories are encoded with temporal and contextual tags; semantic memories form interconnected conceptual networks. Supports pattern completion and associative retrieval.',
+        role: 'Permanent storage and retrieval of consolidated knowledge and experiences.',
+        params: [
+          { name: 'Encoding Speed', value: 0.5, min: 0.2, max: 1.0, unit: 's', key: 'speed' },
+          { name: 'Consolidation Strength', value: 0.7, min: 0.2, max: 1.0, unit: '', key: 'strength' },
+        ],
+        connections: ['memory', 'working_memory', 'executive'],
+        color: '#3B82F6',
+      },
+      cortical: {
+        name: 'Cortical Processing',
+        desc: 'Higher-order cortical analysis including pattern recognition, abstract reasoning, and detailed stimulus evaluation. Operates in parallel with subcortical fast paths but at higher latency.',
+        role: 'Detailed, high-fidelity processing of complex stimuli and abstract thought.',
+        params: [
+          { name: 'Processing Depth', value: 0.6, min: 0.2, max: 1.0, unit: 's', key: 'speed' },
+          { name: 'Abstraction Level', value: 0.7, min: 0.1, max: 1.0, unit: '', key: 'abstraction' },
+        ],
+        connections: ['sensory', 'language', 'executive', 'amygdala'],
+        color: '#A855F7',
+      },
+    };
+
+    // Custom module parameter overrides (from inspector sliders)
+    const paramOverrides = {};
+
+    // ---- Scenarios ----
+    const scenarios = [
+      {
+        name: 'Process a Sentence',
+        title: '"The cat sat on the mat"',
+        duration: 3000,
+        steps: [
+          { module: 'sensory',    delay: 0,    duration: 400, input: 'Auditory waveform received', output: 'Phoneme sequence: /ðə kæt sæt ɒn ðə mæt/' },
+          { module: 'language',   delay: 400,  duration: 500, input: 'Phoneme stream: /ðə kæt.../', output: 'Parse tree: [S [NP the cat] [VP sat [PP on [NP the mat]]]]' },
+          { module: 'memory',     delay: 900,  duration: 400, input: 'Semantic query: "cat", "mat"', output: 'Retrieved: cat=feline_animal, mat=flat_surface, sat=past_tense(sit)' },
+          { module: 'executive',  delay: 1300, duration: 500, input: 'Integrated meaning frame', output: 'Broadcast: "Agent(cat) performed Action(sit) at Location(mat)"' },
+          { module: 'motor',      delay: 1800, duration: 400, input: 'Comprehension confirmation', output: 'Response: understanding acknowledged, ready for next input' },
+        ],
+        thought: 'The auditory signal was parsed into phonemes, then syntactically structured. Semantic memory retrieved meanings for each word, which were integrated in the Global Workspace into a coherent situational model: a cat sitting on a mat. Comprehension was confirmed via motor output pathway.',
+        humanTime: 300,
+      },
+      {
+        name: 'Recall a Childhood Memory',
+        title: 'Episodic retrieval with emotional coloring',
+        duration: 4000,
+        steps: [
+          { module: 'executive',       delay: 0,    duration: 500, input: 'Goal: retrieve childhood memory', output: 'Search cue generated: temporal=childhood, valence=positive' },
+          { module: 'memory',          delay: 500,  duration: 600, input: 'Episodic search: childhood + positive', output: 'Match: "Birthday party, age 7, grandmother\'s house"' },
+          { module: 'longterm_memory', delay: 600,  duration: 500, input: 'Deep retrieval: context expansion', output: 'Details: cake, candles, garden, laughter, warm summer day' },
+          { module: 'emotion',         delay: 1100, duration: 700, input: 'Memory content + somatic markers', output: 'Emotion: nostalgia (valence=0.8, arousal=0.4), warmth, slight sadness' },
+          { module: 'executive',       delay: 1800, duration: 500, input: 'Emotional memory integration', output: 'Broadcast: vivid episodic memory with emotional coloring' },
+          { module: 'language',        delay: 2300, duration: 600, input: 'Memory + emotion bundle', output: 'Verbal report: "I remember my 7th birthday at grandma\'s..."' },
+        ],
+        thought: 'Executive control initiated a directed memory search with childhood temporal cues. Episodic memory returned a birthday party scene, which was expanded with contextual details from long-term storage. The emotion engine colored the memory with nostalgia and warmth. The integrated experience was broadcast globally and verbalized through the language system.',
+        humanTime: 500,
+      },
+      {
+        name: 'Financial Decision',
+        title: 'System 1 vs System 2 conflict',
+        duration: 5000,
+        steps: [
+          { module: 'sensory',        delay: 0,    duration: 400, input: 'Visual: investment opportunity data', output: 'Parsed: 18% return, high volatility, 3-year lock' },
+          { module: 'dualprocess',    delay: 400,  duration: 300, input: 'Stimulus: high-return investment', output: 'System 1 (fast): "Great return! Invest now!" (excitement bias)' },
+          { module: 'dualprocess',    delay: 700,  duration: 800, input: 'Override: engaging System 2', output: 'System 2 (slow): Analyzing risk/reward ratio, volatility metrics...' },
+          { module: 'working_memory', delay: 1500, duration: 500, input: 'Hold: return=18%, risk=high, lock=3yr', output: 'Comparison: current portfolio risk, liquidity needs, market conditions' },
+          { module: 'emotion',        delay: 2000, duration: 500, input: 'Somatic marker check', output: 'Gut feeling: anxiety (loss aversion), excitement (gain prospect)' },
+          { module: 'decision',       delay: 2500, duration: 600, input: 'System 2 analysis + somatic markers', output: 'Decision: invest 30% (compromise between caution and opportunity)' },
+          { module: 'executive',      delay: 3100, duration: 400, input: 'Decision result', output: 'Broadcast: partial investment strategy, confidence=0.72' },
+          { module: 'motor',          delay: 3500, duration: 400, input: 'Execute decision', output: 'Action: submit investment order for 30% of available capital' },
+        ],
+        thought: 'The financial data triggered an immediate System 1 "invest now" impulse driven by the attractive 18% return. System 2 was engaged to perform analytical evaluation, loading risk metrics into working memory. The emotion engine contributed conflicting somatic markers (excitement vs. anxiety), revealing a classic prospect theory framing effect. The decision module resolved the conflict with a compromise: partial investment at 30%, balancing opportunity against risk aversion.',
+        humanTime: 2000,
+      },
+      {
+        name: 'Learn a New Word',
+        title: 'Language acquisition through memory encoding',
+        duration: 3500,
+        steps: [
+          { module: 'sensory',         delay: 0,    duration: 350, input: 'Auditory: "Petrichor means the smell of rain"', output: 'Phonemes extracted: /pɛtrɪkɔːr/' },
+          { module: 'language',        delay: 350,  duration: 500, input: 'Unknown word detected: "petrichor"', output: 'Parsed: petrichor = [noun], definition = "smell of rain on dry earth"' },
+          { module: 'working_memory',  delay: 850,  duration: 500, input: 'New entry: petrichor', output: 'Rehearsing: phonological loop active, binding form to meaning' },
+          { module: 'longterm_memory', delay: 1350, duration: 700, input: 'Encode: petrichor -> semantic network', output: 'Encoded: linked to "rain", "earth", "smell", "nature" nodes' },
+          { module: 'executive',       delay: 2050, duration: 500, input: 'Encoding confirmation', output: 'Broadcast: new word acquired, confidence=0.85, needs consolidation' },
+        ],
+        thought: 'The auditory system extracted the novel phoneme sequence "petrichor." The language module identified it as unknown and parsed the accompanying definition. Working memory held the form-meaning pair in the phonological loop for rehearsal. Long-term memory encoded the new word by linking it to existing semantic nodes (rain, earth, smell). The Global Workspace confirmed acquisition with a consolidation flag for sleep-based strengthening.',
+        humanTime: 400,
+      },
+      {
+        name: 'Respond to Danger',
+        title: 'Amygdala fast-path, fight-or-flight',
+        duration: 2000,
+        steps: [
+          { module: 'sensory',    delay: 0,   duration: 150, input: 'Visual: large dark shape approaching fast', output: 'Threat signal: size=large, velocity=high, trajectory=toward_self' },
+          { module: 'amygdala',   delay: 150, duration: 200, input: 'THREAT DETECTED (fast path, bypassing cortex)', output: 'ALARM: fight-or-flight activation, cortisol + adrenaline surge' },
+          { module: 'motor',      delay: 350, duration: 250, input: 'Amygdala emergency signal', output: 'IMMEDIATE: jump back, raise arms, heart rate spike' },
+          { module: 'cortical',   delay: 200, duration: 600, input: 'Parallel slow path: analyzing stimulus', output: 'Analysis: object identified as a ball, not a threat' },
+          { module: 'executive',  delay: 800, duration: 400, input: 'Cortical override + amygdala report', output: 'Broadcast: false alarm, downregulate threat response' },
+          { module: 'emotion',    delay: 1200, duration: 300, input: 'Resolution signal', output: 'Relief (valence=0.6), residual arousal declining, embarrassment' },
+        ],
+        thought: 'The sensory system detected a fast-approaching large object. The amygdala, operating on a fast subcortical path that bypasses detailed cortical analysis, immediately triggered a fight-or-flight response -- motor output executed a defensive jump in under 350ms. Meanwhile, the slower cortical pathway performed detailed analysis and identified the object as a harmless ball. The Global Workspace broadcast a "false alarm" signal, and the emotion engine transitioned from fear to relief with residual arousal.',
+        humanTime: 150,
+      },
+    ];
+
+    // State
+    let selectedScenario = 0;
+    let isSimulating = false;
+    let simTimeouts = [];
+
+    // ---- Scenario Card Selection ----
+    document.querySelectorAll('.scenario-card').forEach(card => {
+      card.addEventListener('click', () => {
+        if (isSimulating) return;
+        document.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+        selectedScenario = parseInt(card.dataset.scenario);
+      });
+    });
+
+    // ---- Module Inspector ----
+    function inspectModule(moduleKey) {
+      if (isSimulating) return;
+      const info = moduleInfo[moduleKey];
+      if (!info) return;
+
+      const panel = document.getElementById('inspectorPanel');
+      const placeholder = document.getElementById('inspectorPlaceholder');
+      placeholder.classList.add('hidden');
+
+      const connectionsHtml = info.connections.map(c => {
+        const ci = moduleInfo[c];
+        return `<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 mr-1 mb-1">${ci ? ci.name : c}</span>`;
+      }).join('');
+
+      const paramsHtml = info.params.map(p => {
+        const override = paramOverrides[moduleKey + '_' + p.key];
+        const currentVal = override !== undefined ? override : p.value;
+        const displayVal = p.unit === 'words' || p.unit === 'items' || p.unit === 'streams' ? Math.round(currentVal) : currentVal.toFixed(2);
+        return `
+          <div class="mb-3">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="font-medium text-gray-700">${p.name}</span>
+              <span class="text-accent font-mono" id="paramVal_${moduleKey}_${p.key}">${displayVal}${p.unit ? ' ' + p.unit : ''}</span>
+            </div>
+            <input type="range" class="w-full" min="${p.min}" max="${p.max}" step="${(p.max - p.min) / 100}" value="${currentVal}"
+              onInput="updateParam('${moduleKey}', '${p.key}', this.value, '${p.unit}', ${p.min}, ${p.max})">
+          </div>
+        `;
+      }).join('');
+
+      panel.innerHTML = `
+        <div class="p-4">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-3 h-3 rounded-full" style="background:${info.color}"></div>
+            <h4 class="font-serif text-base font-bold text-navy">${info.name}</h4>
+          </div>
+          <p class="text-xs text-gray-600 leading-relaxed mb-3">${info.desc}</p>
+          <p class="text-xs text-gray-400 italic mb-4">${info.role}</p>
+          <div class="border-t border-gray-100 pt-3 mb-3">
+            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Parameters</div>
+            ${paramsHtml}
+          </div>
+          <div class="border-t border-gray-100 pt-3">
+            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Connections</div>
+            <div class="flex flex-wrap">${connectionsHtml}</div>
+          </div>
+        </div>
+      `;
+
+      panel.classList.add('open');
+    }
+
+    function updateParam(moduleKey, paramKey, value, unit, min, max) {
+      const numVal = parseFloat(value);
+      paramOverrides[moduleKey + '_' + paramKey] = numVal;
+      const display = (unit === 'words' || unit === 'items' || unit === 'streams') ? Math.round(numVal) : numVal.toFixed(2);
+      const el = document.getElementById('paramVal_' + moduleKey + '_' + paramKey);
+      if (el) el.textContent = display + (unit ? ' ' + unit : '');
+    }
+
+    // ---- Flow Arrow Drawing ----
+    function drawFlowArrow(fromKey, toKey) {
+      const from = modulePositions[fromKey];
+      const to = modulePositions[toKey];
+      if (!from || !to) return null;
+
+      const svg = document.getElementById('brainSVG');
+      const arrowGroup = document.getElementById('flowArrows');
+
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const offsetFrom = 35;
+      const offsetTo = 35;
+
+      const x1 = from.x + (dx / dist) * offsetFrom;
+      const y1 = from.y + (dy / dist) * offsetFrom;
+      const x2 = to.x - (dx / dist) * offsetTo;
+      const y2 = to.y - (dy / dist) * offsetTo;
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      line.setAttribute('stroke', '#F97316');
+      line.setAttribute('stroke-width', '2.5');
+      line.setAttribute('marker-end', 'url(#arrowOrange)');
+      line.classList.add('flow-arrow');
+      arrowGroup.appendChild(line);
+
+      return line;
+    }
+
+    function clearFlowArrows() {
+      const arrowGroup = document.getElementById('flowArrows');
+      arrowGroup.innerHTML = '';
+    }
+
+    // ---- Light Up Module ----
+    function lightModule(moduleKey) {
+      const el = document.querySelector(`.sim-module[data-module="${moduleKey}"]`);
+      if (el) {
+        el.classList.add('lit', 'active-module');
+        // Set filter based on module color
+        const info = moduleInfo[moduleKey];
+        if (info) {
+          const colorMap = {
+            '#22C55E': 'url(#glowGreen)',
+            '#3B82F6': 'url(#glowBlue)',
+            '#EF4444': 'url(#glowRed)',
+            '#A855F7': 'url(#glowPurple)',
+            '#F97316': 'url(#glowOrange)',
+            '#EAB308': 'url(#glowYellow)',
+          };
+          const filterVal = colorMap[info.color] || 'url(#glowOrange)';
+          el.style.filter = `${filterVal}`;
+        }
+      }
+    }
+
+    function unlightModule(moduleKey) {
+      const el = document.querySelector(`.sim-module[data-module="${moduleKey}"]`);
+      if (el) {
+        el.classList.remove('lit', 'active-module');
+        el.style.filter = '';
+      }
+    }
+
+    function unlightAllModules() {
+      document.querySelectorAll('.sim-module').forEach(el => {
+        el.classList.remove('lit', 'active-module');
+        el.style.filter = '';
+      });
+    }
+
+    // ---- Add Log Entry ----
+    function addLogEntry(time, module, text, isError) {
+      const log = document.getElementById('simLog');
+      const entry = document.createElement('div');
+      entry.className = 'sim-log-entry mb-1';
+      const color = isError ? 'text-red-500' : 'text-gray-700';
+      const moduleName = moduleInfo[module] ? moduleInfo[module].name : module;
+      entry.innerHTML = `<span class="text-accent font-semibold">[${time.toFixed(1)}s]</span> <span class="font-semibold ${color}">${moduleName}:</span> <span class="text-gray-600">${text}</span>`;
+      log.appendChild(entry);
+      requestAnimationFrame(() => {
+        entry.classList.add('visible');
+        log.scrollTop = log.scrollHeight;
+      });
+    }
+
+    // ---- Run Simulation ----
+    document.getElementById('runSimBtn').addEventListener('click', () => {
+      if (isSimulating) return;
+      runSimulation();
+    });
+
+    function runSimulation() {
+      isSimulating = true;
+      const btn = document.getElementById('runSimBtn');
+      btn.textContent = 'Simulating...';
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+
+      // Reset
+      unlightAllModules();
+      clearFlowArrows();
+      document.getElementById('simLog').innerHTML = '';
+      document.getElementById('resultsPanel').classList.add('hidden');
+
+      const scenario = scenarios[selectedScenario];
+      const steps = scenario.steps;
+      simTimeouts = [];
+
+      // Get speed multiplier from param overrides
+      function getSpeedMultiplier(moduleKey) {
+        const speedKey = moduleKey + '_speed';
+        const override = paramOverrides[speedKey];
+        if (override !== undefined) {
+          const info = moduleInfo[moduleKey];
+          if (info) {
+            const defaultParam = info.params.find(p => p.key === 'speed');
+            if (defaultParam) {
+              return override / defaultParam.value;
+            }
+          }
+        }
+        return 1;
+      }
+
+      let prevModuleKey = null;
+
+      steps.forEach((step, idx) => {
+        const speedMult = getSpeedMultiplier(step.module);
+        const adjustedDelay = step.delay * speedMult;
+        const adjustedDuration = step.duration * speedMult;
+
+        // Light up module
+        const t1 = setTimeout(() => {
+          lightModule(step.module);
+          addLogEntry(adjustedDelay / 1000, step.module, step.input);
+
+          // Draw arrow from previous step
+          if (idx > 0) {
+            const prevKey = steps[idx - 1].module;
+            if (prevKey !== step.module) {
+              const arrow = drawFlowArrow(prevKey, step.module);
+              if (arrow) {
+                setTimeout(() => arrow.classList.add('active-flow'), 50);
+              }
+            }
+          }
+        }, adjustedDelay);
+        simTimeouts.push(t1);
+
+        // Show output and dim module
+        const t2 = setTimeout(() => {
+          addLogEntry((adjustedDelay + adjustedDuration) / 1000, step.module, step.output);
+          // Dim after a bit
+          setTimeout(() => {
+            unlightModule(step.module);
+          }, 200);
+        }, adjustedDelay + adjustedDuration);
+        simTimeouts.push(t2);
+      });
+
+      // Completion
+      const totalDuration = scenario.duration;
+      const t3 = setTimeout(() => {
+        addLogEntry(totalDuration / 1000, 'executive', 'Simulation complete.');
+        unlightAllModules();
+        showResults(scenario);
+
+        isSimulating = false;
+        btn.textContent = 'Run Simulation';
+        btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      }, totalDuration + 500);
+      simTimeouts.push(t3);
+    }
+
+    // ---- Show Results ----
+    function showResults(scenario) {
+      const panel = document.getElementById('resultsPanel');
+      const timings = document.getElementById('resultsTimings');
+      const thought = document.getElementById('resultsThought');
+      const comparison = document.getElementById('resultsComparison');
+
+      // Timings
+      let timingsHtml = '';
+      const maxDuration = Math.max(...scenario.steps.map(s => s.duration));
+      scenario.steps.forEach(step => {
+        const info = moduleInfo[step.module];
+        const pct = (step.duration / maxDuration) * 100;
+        const color = info ? info.color : '#F97316';
+        timingsHtml += `
+          <div class="flex items-center gap-3 text-xs">
+            <div class="w-28 font-medium text-gray-700 truncate">${info ? info.name : step.module}</div>
+            <div class="flex-1 results-bar">
+              <div class="results-bar-fill" style="width:${pct}%;background:${color}"></div>
+            </div>
+            <div class="w-14 text-right font-mono text-gray-500">${step.duration}ms</div>
+          </div>
+        `;
+      });
+      timings.innerHTML = timingsHtml;
+
+      // Thought process
+      thought.innerHTML = `
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Thought Process</div>
+        <p class="text-sm text-gray-700 leading-relaxed">${scenario.thought}</p>
+      `;
+
+      // Comparison
+      const simTime = (scenario.duration / 1000).toFixed(1);
+      const humanTime = scenario.humanTime;
+      const speedup = Math.round(scenario.duration / humanTime);
+      comparison.innerHTML = `
+        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Performance Comparison</div>
+        <div>Human brain:  ~${humanTime}ms</div>
+        <div>Simulation:   ${scenario.duration}ms (${simTime}s visual)</div>
+        <div>Ratio:        ${speedup}x slowdown (visualization speed)</div>
+        <div class="mt-1 text-gray-400">Note: Actual neural processing is massively parallel.</div>
+        <div class="text-gray-400">This simulation serializes steps for educational clarity.</div>
+      `;
+
+      panel.classList.remove('hidden');
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   </script>
 
 </body>
