@@ -1,0 +1,311 @@
+/* =============================================
+   Human Cognition AI - Global Styles
+   Theme: Light (#F8FAFC bg, #F97316 accent)
+   ============================================= */
+
+/* --- Base --- */
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #F8FAFC;
+  color: #0A0F1A;
+}
+h1, h2, h3, h4, h5 {
+  font-family: Georgia, Cambria, 'Times New Roman', serif;
+}
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #F1F5F9; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+
+/* --- Architecture Layer Accordion --- */
+.arch-layer {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+.arch-layer:hover {
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+.arch-layer-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.3s ease;
+}
+.arch-layer.expanded .arch-layer-content {
+  max-height: 400px;
+  padding-top: 12px;
+}
+
+/* --- Module Tiles --- */
+.module-tile {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  font-size: 0.875rem;
+  position: relative;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+}
+.module-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.module-tile.active {
+  outline: 2px solid #F97316;
+  outline-offset: 2px;
+}
+.module-tile .tile-abbr {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.module-tile .tile-num {
+  font-size: 0.6rem;
+  opacity: 0.7;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+/* Tile color tiers */
+.tile-foundation { background: #DBEAFE; color: #1E40AF; }
+.tile-processing { background: #DCFCE7; color: #166534; }
+.tile-motivation { background: #FEF9C3; color: #854D0E; }
+.tile-interface  { background: #FEF3C7; color: #92400E; }
+.tile-advanced   { background: #FFEDD5; color: #9A3412; }
+
+/* --- Code Syntax --- */
+.code-keyword { color: #2563EB; }
+.code-string  { color: #F97316; }
+.code-comment { color: #9CA3AF; }
+.code-func    { color: #0A0F1A; font-weight: 500; }
+.code-number  { color: #7C3AED; }
+
+/* --- Comparison Table --- */
+.comparison-table th {
+  font-family: Georgia, Cambria, serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* --- Research Citations --- */
+.reference {
+  padding-left: 2.5rem;
+  text-indent: -2.5rem;
+}
+
+/* --- BibTeX Popup --- */
+.bibtex-popup {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0,0,0,0.4);
+  align-items: center;
+  justify-content: center;
+}
+.bibtex-popup.show {
+  display: flex;
+}
+
+/* --- Mobile Menu --- */
+.mobile-menu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.mobile-menu.open {
+  max-height: 400px;
+}
+
+/* --- Brain Simulator SVG Animations --- */
+@keyframes pulseGlow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 2px currentColor); }
+  50% { filter: brightness(1.4) drop-shadow(0 0 12px currentColor); }
+}
+@keyframes flowDash {
+  to { stroke-dashoffset: -20; }
+}
+@keyframes moduleActivate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.sim-module {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+.sim-module:hover {
+  filter: brightness(1.15) drop-shadow(0 0 6px rgba(249,115,22,0.4));
+}
+.sim-module.active-module {
+  animation: moduleActivate 0.4s ease;
+}
+.sim-module .idle-glow {
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+.sim-module.lit .idle-glow {
+  opacity: 1;
+}
+.sim-module.lit {
+  filter: brightness(1.3) drop-shadow(0 0 14px currentColor);
+}
+
+/* --- Flow Arrows --- */
+.flow-arrow {
+  stroke-dasharray: 8 4;
+  stroke-dashoffset: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.flow-arrow.active-flow {
+  opacity: 1;
+  animation: flowDash 0.6s linear infinite;
+}
+
+/* --- Simulator Log --- */
+.sim-log-entry {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.3s ease;
+}
+.sim-log-entry.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* --- Inspector Panel --- */
+.inspector-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease, padding 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+}
+.inspector-panel.open {
+  max-height: 600px;
+  opacity: 1;
+}
+
+/* --- Scenario Cards --- */
+.scenario-card {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+.scenario-card:hover {
+  border-color: #F97316;
+  box-shadow: 0 2px 8px rgba(249,115,22,0.15);
+}
+.scenario-card.selected {
+  border-color: #F97316;
+  background: #FFF7ED;
+}
+
+/* --- Range Slider --- */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  background: #E2E8F0;
+  border-radius: 3px;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #F97316;
+  cursor: pointer;
+}
+
+/* --- Results Bars --- */
+.results-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: #E2E8F0;
+  overflow: hidden;
+}
+.results-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s ease;
+}
+
+/* --- Demo Page Step Animation --- */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.demo-step {
+  opacity: 0;
+  transform: translateY(16px);
+}
+.demo-step.active {
+  animation: fadeSlideIn 0.5s ease forwards;
+}
+.demo-step.completed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* --- Intensity Meter --- */
+.intensity-meter {
+  height: 12px;
+  border-radius: 6px;
+  background: #E2E8F0;
+  overflow: hidden;
+  position: relative;
+}
+.intensity-meter-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 1s ease;
+  background: linear-gradient(90deg, #FBBF24, #F97316, #EF4444);
+}
+
+/* --- Pricing Cards --- */
+.pricing-card {
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+.pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.1);
+}
+.pricing-card.featured {
+  border-color: #F97316;
+}
+
+/* --- Feature Cards --- */
+.feature-card {
+  transition: all 0.2s ease;
+}
+.feature-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+/* --- FAQ Accordion --- */
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.faq-item.open .faq-answer {
+  max-height: 300px;
+}
+.faq-item.open .faq-chevron {
+  transform: rotate(180deg);
+}
+.faq-chevron {
+  transition: transform 0.3s ease;
+}

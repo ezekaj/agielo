@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cognitive Simulator Demo — Human Cognition AI</title>
+  <meta name="description" content="Interactive brain simulator showing how 17 cognitive modules process stimuli in real time. Watch danger response, memory recall, and decision-making.">
+  <meta name="theme-color" content="#F8FAFC">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#F8FAFC',
+            navy: '#0A0F1A',
+            accent: '#F97316',
+            'accent-hover': '#EA580C',
+            'layer-blue': '#3B82F6',
+            'layer-green': '#22C55E',
+            'layer-yellow': '#EAB308',
+            'layer-amber': '#F59E0B',
+            'layer-orange': '#F97316',
+          },
+          fontFamily: {
+            'serif': ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-surface text-navy antialiased">
+
+  <!-- NAV -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center justify-between h-14">
+        <div class="flex items-center gap-3">
+          <a href="index.html" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">ZeDigital</a>
+          <span class="text-gray-300">|</span>
+          <a href="index.html" class="font-serif text-lg font-bold text-navy tracking-tight">Human Cognition</a>
+        </div>
+        <div class="hidden md:flex items-center gap-8">
+          <a href="features.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Features</a>
+          <a href="demo.html" class="text-sm text-navy font-semibold">Demo</a>
+          <a href="pricing.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Pricing</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <div id="apiStatus" class="flex items-center gap-1.5 text-xs text-gray-400">
+            <span id="apiDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+            <span id="apiLabel">Offline</span>
+          </div>
+        </div>
+        <button id="hamburger" class="md:hidden p-2 text-gray-600 hover:text-navy" aria-label="Toggle menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <div id="mobileMenu" class="mobile-menu md:hidden">
+        <div class="py-3 border-t border-gray-100 space-y-2">
+          <a href="features.html" class="block text-sm text-gray-600 py-1.5">Features</a>
+          <a href="demo.html" class="block text-sm text-navy font-semibold py-1.5">Demo</a>
+          <a href="pricing.html" class="block text-sm text-gray-600 py-1.5">Pricing</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="block text-sm text-gray-600 py-1.5">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- PAGE HEADER -->
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-6">
+    <h1 class="font-serif text-3xl sm:text-4xl font-bold text-navy mb-2">Cognitive Simulator</h1>
+    <p class="text-gray-500 max-w-2xl">Select a cognitive scenario and observe how information flows through the architecture in real time. Click any module in the brain diagram to inspect its properties.</p>
+  </div>
+
+
+  <!-- FULL SIMULATOR -->
+  <section class="w-full bg-white border-y border-gray-200 py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="grid lg:grid-cols-5 gap-8">
+        <!-- Left: Brain Diagram + Controls -->
+        <div class="lg:col-span-3">
+          <div class="bg-slate-50 border border-gray-200 rounded-xl p-4 sm:p-6 mb-6 relative overflow-hidden">
+            <svg id="brainSVG" viewBox="0 0 500 500" class="w-full max-w-lg mx-auto" style="max-height:500px;">
+              <defs>
+                <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#22C55E" flood-opacity="0.5" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowBlue" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#3B82F6" flood-opacity="0.5" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowRed" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#EF4444" flood-opacity="0.5" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowPurple" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#A855F7" flood-opacity="0.5" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowOrange" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#F97316" flood-opacity="0.6" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowYellow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="4" result="blur"/><feFlood flood-color="#EAB308" flood-opacity="0.5" result="color"/><feComposite in="color" in2="blur" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <marker id="arrowOrange" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#F97316"/></marker>
+              </defs>
+              <g id="flowArrows"></g>
+              <g class="sim-module" data-module="sensory" onclick="inspectModule('sensory')">
+                <circle cx="250" cy="250" r="230" fill="none" stroke="#22C55E" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <circle cx="250" cy="250" r="230" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="185" y="12" width="130" height="28" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+                <text x="250" y="31" text-anchor="middle" font-size="11" font-weight="600" fill="#166534" font-family="Inter, sans-serif">Sensory Input</text>
+                <rect x="185" y="460" width="130" height="28" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+                <text x="250" y="479" text-anchor="middle" font-size="11" font-weight="600" fill="#166534" font-family="Inter, sans-serif">Motor Output</text>
+              </g>
+              <g class="sim-module" data-module="memory" onclick="inspectModule('memory')">
+                <path d="M 80,250 A 170,170 0 0,1 250,80" fill="none" stroke="#3B82F6" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 80,250 A 170,170 0 0,1 250,80" fill="none" stroke="#3B82F6" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="52" y="135" width="110" height="46" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="107" y="155" text-anchor="middle" font-size="10" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+                <text x="107" y="170" text-anchor="middle" font-size="8" fill="#3B82F6" font-family="Inter, sans-serif">Ep / Sem / WM</text>
+              </g>
+              <g class="sim-module" data-module="emotion" onclick="inspectModule('emotion')">
+                <path d="M 420,250 A 170,170 0 0,1 250,420" fill="none" stroke="#EF4444" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 420,250 A 170,170 0 0,1 250,420" fill="none" stroke="#EF4444" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="360" y="290" width="110" height="46" rx="8" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+                <text x="415" y="310" text-anchor="middle" font-size="10" font-weight="600" fill="#991B1B" font-family="Inter, sans-serif">Emotion Engine</text>
+                <text x="415" y="325" text-anchor="middle" font-size="8" fill="#EF4444" font-family="Inter, sans-serif">Amygdala / Somatic</text>
+              </g>
+              <g class="sim-module" data-module="language" onclick="inspectModule('language')">
+                <path d="M 250,80 A 170,170 0 0,1 420,250" fill="none" stroke="#A855F7" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 250,80 A 170,170 0 0,1 420,250" fill="none" stroke="#A855F7" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="355" y="120" width="120" height="46" rx="8" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5"/>
+                <text x="415" y="140" text-anchor="middle" font-size="10" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Language</text>
+                <text x="415" y="155" text-anchor="middle" font-size="8" fill="#A855F7" font-family="Inter, sans-serif">Parse / Generate</text>
+              </g>
+              <g class="sim-module" data-module="dualprocess" onclick="inspectModule('dualprocess')">
+                <path d="M 250,420 A 170,170 0 0,1 80,250" fill="none" stroke="#EAB308" stroke-width="3" opacity="0.3" class="idle-glow"/>
+                <path d="M 250,420 A 170,170 0 0,1 80,250" fill="none" stroke="#EAB308" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.6"/>
+                <rect x="40" y="310" width="120" height="46" rx="8" fill="#FEFCE8" stroke="#EAB308" stroke-width="1.5"/>
+                <text x="100" y="330" text-anchor="middle" font-size="10" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Dual Process</text>
+                <text x="100" y="345" text-anchor="middle" font-size="8" fill="#EAB308" font-family="Inter, sans-serif">Sys 1 / Sys 2</text>
+              </g>
+              <g class="sim-module" data-module="executive" onclick="inspectModule('executive')">
+                <circle cx="250" cy="250" r="80" fill="#FFF7ED" stroke="#F97316" stroke-width="2.5" opacity="0.8"/>
+                <circle cx="250" cy="250" r="80" fill="none" stroke="#F97316" stroke-width="1" opacity="0.3" class="idle-glow"/>
+                <text x="250" y="240" text-anchor="middle" font-size="12" font-weight="700" fill="#9A3412" font-family="Inter, sans-serif">Global</text>
+                <text x="250" y="256" text-anchor="middle" font-size="12" font-weight="700" fill="#9A3412" font-family="Inter, sans-serif">Workspace</text>
+                <text x="250" y="274" text-anchor="middle" font-size="9" fill="#F97316" font-family="Inter, sans-serif">Executive Control</text>
+              </g>
+              <g class="sim-module" data-module="working_memory" onclick="inspectModule('working_memory')">
+                <circle cx="155" cy="200" r="28" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="155" y="197" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Working</text>
+                <text x="155" y="209" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+              </g>
+              <g class="sim-module" data-module="decision" onclick="inspectModule('decision')">
+                <circle cx="170" cy="320" r="28" fill="#FEFCE8" stroke="#EAB308" stroke-width="1.5"/>
+                <text x="170" y="318" text-anchor="middle" font-size="8" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Decision</text>
+                <text x="170" y="330" text-anchor="middle" font-size="8" font-weight="600" fill="#854D0E" font-family="Inter, sans-serif">Module</text>
+              </g>
+              <g class="sim-module" data-module="amygdala" onclick="inspectModule('amygdala')">
+                <circle cx="340" cy="350" r="24" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+                <text x="340" y="353" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B" font-family="Inter, sans-serif">Amygdala</text>
+              </g>
+              <g class="sim-module" data-module="longterm_memory" onclick="inspectModule('longterm_memory')">
+                <circle cx="120" cy="100" r="28" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+                <text x="120" y="97" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Long-term</text>
+                <text x="120" y="109" text-anchor="middle" font-size="8" font-weight="600" fill="#1E40AF" font-family="Inter, sans-serif">Memory</text>
+              </g>
+              <g class="sim-module" data-module="cortical" onclick="inspectModule('cortical')">
+                <circle cx="330" cy="150" r="28" fill="#FAF5FF" stroke="#A855F7" stroke-width="1.5"/>
+                <text x="330" y="147" text-anchor="middle" font-size="8" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Cortical</text>
+                <text x="330" y="159" text-anchor="middle" font-size="8" font-weight="600" fill="#6B21A8" font-family="Inter, sans-serif">Processing</text>
+              </g>
+            </svg>
+          </div>
+
+          <!-- Scenario Selector -->
+          <div class="mb-4">
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Select a Scenario</h3>
+            <div class="grid sm:grid-cols-2 gap-3" id="scenarioCards">
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="0">
+                <div class="text-sm font-semibold text-navy mb-1">Process a Sentence</div>
+                <div class="text-xs text-gray-500">"The cat sat on the mat" -- sensory to comprehension</div>
+                <div class="text-xs text-accent mt-1 font-medium">~3.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="1">
+                <div class="text-sm font-semibold text-navy mb-1">Recall a Memory</div>
+                <div class="text-xs text-gray-500">Childhood memory retrieval with emotional coloring</div>
+                <div class="text-xs text-accent mt-1 font-medium">~4.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="2">
+                <div class="text-sm font-semibold text-navy mb-1">Financial Decision</div>
+                <div class="text-xs text-gray-500">System 1 vs System 2 conflict in decision-making</div>
+                <div class="text-xs text-accent mt-1 font-medium">~5.0s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm" data-scenario="3">
+                <div class="text-sm font-semibold text-navy mb-1">Learn a New Word</div>
+                <div class="text-xs text-gray-500">Language acquisition through memory encoding</div>
+                <div class="text-xs text-accent mt-1 font-medium">~3.5s</div>
+              </div>
+              <div class="scenario-card bg-white border border-gray-200 rounded-lg p-3 shadow-sm sm:col-span-2 selected" data-scenario="4">
+                <div class="text-sm font-semibold text-navy mb-1">Respond to Danger</div>
+                <div class="text-xs text-gray-500">Amygdala fast-path bypassing cortex, fight-or-flight response</div>
+                <div class="text-xs text-accent mt-1 font-medium">~2.0s (fast!)</div>
+              </div>
+            </div>
+          </div>
+
+          <button id="runSimBtn" class="w-full sm:w-auto px-8 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors shadow-sm text-base">
+            Run Simulation
+          </button>
+        </div>
+
+        <!-- Right: Log + Inspector + Results -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+          <div>
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Processing Log</h3>
+            <div id="simLog" class="bg-slate-50 border border-gray-200 rounded-lg p-4 font-mono text-xs leading-relaxed min-h-[200px] max-h-[320px] overflow-y-auto">
+              <div class="text-gray-400 italic">Select a scenario and click "Run Simulation" to begin.</div>
+            </div>
+          </div>
+          <div>
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Module Inspector</h3>
+            <div id="inspectorPanel" class="inspector-panel bg-white border border-gray-200 rounded-lg shadow-sm"></div>
+            <div id="inspectorPlaceholder" class="bg-slate-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-400 italic">
+              Click any module in the brain diagram to inspect its parameters and connections.
+            </div>
+          </div>
+          <div id="resultsPanel" class="hidden">
+            <h3 class="font-serif text-lg font-bold text-navy mb-3">Results</h3>
+            <div class="bg-white border border-gray-200 rounded-lg p-4 shadow-sm space-y-4">
+              <div id="resultsTimings" class="space-y-2"></div>
+              <hr class="border-gray-100">
+              <div id="resultsThought" class="text-sm text-gray-700 leading-relaxed"></div>
+              <hr class="border-gray-100">
+              <div id="resultsComparison" class="text-xs text-gray-500 bg-slate-50 rounded p-3 font-mono"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- DANGER RESPONSE WALKTHROUGH -->
+  <section class="max-w-4xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-3xl font-bold text-navy mb-2">Danger Response: Step-by-Step</h2>
+    <p class="text-gray-500 mb-10">How the cognitive architecture processes "A car is rapidly approaching" in under 350ms.</p>
+
+    <div id="dangerWalkthrough" class="space-y-4">
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="1">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm font-bold text-gray-600 flex-shrink-0">1</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Stimulus Input</div>
+            <div class="text-sm text-gray-600 mt-1">"A car is rapidly approaching" enters the sensory processing layer.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="2">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-sm font-bold text-green-700 flex-shrink-0">2</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Sensory Layer Activates</div>
+            <div class="text-sm text-gray-600 mt-1">Visual processing module glows. Threat signal extracted: size=large, velocity=high, trajectory=toward_self.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="3">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-sm font-bold text-yellow-700 flex-shrink-0">3</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">System 1 (Fast) Fires</div>
+            <div class="text-sm text-gray-600 mt-1">Immediate threat assessment via the amygdala fast-path, bypassing cortical analysis entirely. Response time: ~80ms.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="4">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-sm font-bold text-red-700 flex-shrink-0">4</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Emotion System Activates</div>
+            <div class="text-sm text-gray-600 mt-1">Fear response with high intensity. Cortisol and adrenaline surge simulated.</div>
+            <div class="mt-3">
+              <div class="text-xs text-gray-500 mb-1">Fear Intensity</div>
+              <div class="intensity-meter w-full max-w-xs"><div class="intensity-meter-fill" id="fearMeter" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="5">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700 flex-shrink-0">5</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Memory Search</div>
+            <div class="text-sm text-gray-600 mt-1">Similar experiences retrieved from episodic memory. Past near-miss events inform response calibration.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="6">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-sm font-bold text-green-700 flex-shrink-0">6</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Motor Planning</div>
+            <div class="text-sm text-gray-600 mt-1">Evasive action computed. Motor output: jump back immediately, raise arms defensively, spike heart rate.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="7">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-sm font-bold text-purple-700 flex-shrink-0">7</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">System 2 (Slow) Validates</div>
+            <div class="text-sm text-gray-600 mt-1">Conscious awareness catches up. Cortical processing identifies the object and validates the response was appropriate.</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="8">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-sm font-bold text-orange-700 flex-shrink-0">8</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Metacognition Logs</div>
+            <div class="text-sm text-gray-600 mt-1">Thought trace appears: "Threat detected -> fast-path activated -> motor response initiated -> cortical validation pending."</div>
+            <div class="mt-2 bg-slate-50 border border-gray-200 rounded p-3 font-mono text-xs text-gray-600" id="thoughtTrace"></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="9">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-sm font-bold text-accent flex-shrink-0">9</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Action Output</div>
+            <div class="text-sm text-gray-600 mt-1 font-medium">"Step back immediately."</div>
+            <div class="text-xs text-gray-400 mt-1">Total processing time: ~150ms (human equivalent)</div>
+          </div>
+        </div>
+      </div>
+      <div class="demo-step bg-white border border-gray-200 rounded-lg p-5 shadow-sm" data-step="10">
+        <div class="flex items-start gap-4">
+          <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700 flex-shrink-0">10</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Memory Consolidation</div>
+            <div class="text-sm text-gray-600 mt-1">Experience stored in episodic memory with high emotional salience. Flagged for sleep consolidation to strengthen future threat detection.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 text-center">
+      <button id="replayDanger" class="px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors shadow-sm">
+        Replay Walkthrough
+      </button>
+    </div>
+  </section>
+
+
+  <!-- FOOTER -->
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      <div class="grid sm:grid-cols-3 gap-8 mb-8">
+        <div>
+          <div class="font-serif text-lg font-bold text-navy mb-3">Human Cognition AI</div>
+          <p class="text-sm text-gray-500 leading-relaxed">A neuroscience-grounded cognitive architecture by ZeDigital.</p>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-navy mb-3">Pages</div>
+          <div class="space-y-2 text-sm">
+            <a href="index.html" class="block text-gray-500 hover:text-navy transition-colors">Home</a>
+            <a href="features.html" class="block text-gray-500 hover:text-navy transition-colors">Features</a>
+            <a href="pricing.html" class="block text-gray-500 hover:text-navy transition-colors">Pricing</a>
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-navy mb-3">Legal</div>
+          <div class="space-y-2 text-sm">
+            <a href="terms.html" class="block text-gray-500 hover:text-navy transition-colors">Terms of Service</a>
+            <a href="privacy.html" class="block text-gray-500 hover:text-navy transition-colors">Privacy Policy</a>
+            <a href="mailto:elvizekaj@zedigital.tech" class="block text-gray-500 hover:text-navy transition-colors">Contact</a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+        <div>MIT License. Built by ZeDigital.</div>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="hover:text-navy transition-colors">GitHub</a>
+          <span class="text-gray-300">|</span>
+          <a href="https://zedigital.tech" target="_blank" class="hover:text-navy transition-colors">Portfolio</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+
+  <script src="main.js"></script>
+  <script>
+    // Default scenario to danger_response
+    selectedScenario = 4;
+
+    // Danger walkthrough auto-play
+    function runDangerWalkthrough() {
+      const steps = document.querySelectorAll('#dangerWalkthrough .demo-step');
+      steps.forEach(s => { s.classList.remove('active', 'completed'); s.style.opacity = '0'; s.style.transform = 'translateY(16px)'; });
+      const fearMeter = document.getElementById('fearMeter');
+      if (fearMeter) fearMeter.style.width = '0%';
+      const trace = document.getElementById('thoughtTrace');
+      if (trace) trace.textContent = '';
+
+      const traceLines = [
+        '[0.00s] THREAT_DETECT: fast-path activated',
+        '[0.08s] AMYGDALA: fight-or-flight engaged',
+        '[0.15s] MOTOR: evasive action initiated',
+        '[0.35s] CORTICAL: detailed analysis complete',
+        '[0.40s] EXECUTIVE: response validated',
+      ];
+
+      steps.forEach((step, idx) => {
+        setTimeout(() => {
+          step.classList.add('active');
+          if (idx === 3 && fearMeter) {
+            setTimeout(() => { fearMeter.style.width = '85%'; }, 200);
+          }
+          if (idx === 7 && trace) {
+            let lineIdx = 0;
+            const typeInterval = setInterval(() => {
+              if (lineIdx < traceLines.length) {
+                trace.textContent += (lineIdx > 0 ? '\n' : '') + traceLines[lineIdx];
+                lineIdx++;
+              } else {
+                clearInterval(typeInterval);
+              }
+            }, 300);
+          }
+        }, idx * 800);
+      });
+
+      setTimeout(() => {
+        steps.forEach(s => s.classList.add('completed'));
+      }, steps.length * 800 + 500);
+    }
+
+    // Auto-play on page load
+    setTimeout(runDangerWalkthrough, 600);
+
+    // Replay button
+    document.getElementById('replayDanger').addEventListener('click', () => {
+      runDangerWalkthrough();
+      document.getElementById('dangerWalkthrough').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  </script>
+</body>
+</html>

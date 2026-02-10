@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sponsorship & Pricing — Human Cognition AI</title>
+  <meta name="description" content="Support cognitive AI research. Sponsorship tiers for researchers, labs, and institutions. Academic licensing available.">
+  <meta name="theme-color" content="#F8FAFC">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: '#F8FAFC',
+            navy: '#0A0F1A',
+            accent: '#F97316',
+            'accent-hover': '#EA580C',
+          },
+          fontFamily: {
+            'serif': ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
+            'sans': ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-surface text-navy antialiased">
+
+  <!-- NAV -->
+  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6">
+      <div class="flex items-center justify-between h-14">
+        <div class="flex items-center gap-3">
+          <a href="index.html" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">ZeDigital</a>
+          <span class="text-gray-300">|</span>
+          <a href="index.html" class="font-serif text-lg font-bold text-navy tracking-tight">Human Cognition</a>
+        </div>
+        <div class="hidden md:flex items-center gap-8">
+          <a href="features.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Features</a>
+          <a href="demo.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Demo</a>
+          <a href="pricing.html" class="text-sm text-navy font-semibold">Pricing</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
+        </div>
+        <button id="hamburger" class="md:hidden p-2 text-gray-600 hover:text-navy" aria-label="Toggle menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <div id="mobileMenu" class="mobile-menu md:hidden">
+        <div class="py-3 border-t border-gray-100 space-y-2">
+          <a href="features.html" class="block text-sm text-gray-600 py-1.5">Features</a>
+          <a href="demo.html" class="block text-sm text-gray-600 py-1.5">Demo</a>
+          <a href="pricing.html" class="block text-sm text-navy font-semibold py-1.5">Pricing</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="block text-sm text-gray-600 py-1.5">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+
+  <!-- HEADER -->
+  <header class="max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-12 text-center">
+    <h1 class="font-serif text-4xl sm:text-5xl font-bold text-navy leading-tight tracking-tight">
+      Support Cognitive AI Research
+    </h1>
+    <p class="mt-4 text-gray-500 max-w-2xl mx-auto text-lg">
+      Human Cognition AI is open source under the MIT license. Sponsorship funds ongoing research, new module development, and infrastructure.
+    </p>
+  </header>
+
+
+  <!-- PRICING CARDS -->
+  <section class="max-w-5xl mx-auto px-4 sm:px-6 pb-20">
+    <div class="grid md:grid-cols-3 gap-8">
+      <!-- Researcher -->
+      <div class="pricing-card bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+        <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Researcher</div>
+        <div class="font-serif text-4xl font-bold text-navy mb-1">$10<span class="text-lg font-normal text-gray-400">/mo</span></div>
+        <p class="text-sm text-gray-500 mb-6">For individual researchers and students exploring cognitive architectures.</p>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Name listed in project README</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Early access to new modules</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Access to research discussion forum</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Quarterly progress newsletter</li>
+        </ul>
+        <a href="https://paypal.me/zelvi999" target="_blank" class="block w-full text-center px-6 py-3 border-2 border-accent text-accent font-semibold rounded-lg hover:bg-accent hover:text-white transition-colors">
+          Sponsor via PayPal
+        </a>
+      </div>
+
+      <!-- Lab (Featured) -->
+      <div class="pricing-card featured bg-white border-2 border-accent rounded-xl p-8 shadow-sm relative">
+        <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-accent text-white text-xs font-semibold rounded-full">Most Popular</span>
+        <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Lab</div>
+        <div class="font-serif text-4xl font-bold text-navy mb-1">$50<span class="text-lg font-normal text-gray-400">/mo</span></div>
+        <p class="text-sm text-gray-500 mb-6">For research labs wanting priority access and collaboration opportunities.</p>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Logo on project website</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Priority support and bug fixes</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Research collaboration invitations</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Early access to all new features</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Monthly technical call</li>
+        </ul>
+        <a href="https://paypal.me/zelvi999" target="_blank" class="block w-full text-center px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors">
+          Sponsor via PayPal
+        </a>
+      </div>
+
+      <!-- Institution -->
+      <div class="pricing-card bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+        <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Institution</div>
+        <div class="font-serif text-4xl font-bold text-navy mb-1">$200<span class="text-lg font-normal text-gray-400">/mo</span></div>
+        <p class="text-sm text-gray-500 mb-6">For universities and organizations wanting custom modules and co-research.</p>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Co-research partnership</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Custom module development</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Dedicated support channel</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Co-authorship opportunities</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> Custom deployment assistance</li>
+          <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">&#10003;</span> All Lab tier benefits</li>
+        </ul>
+        <a href="mailto:elvizekaj@zedigital.tech" class="block w-full text-center px-6 py-3 border-2 border-accent text-accent font-semibold rounded-lg hover:bg-accent hover:text-white transition-colors">
+          Contact Us
+        </a>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- PAYMENT METHODS -->
+  <section class="w-full bg-white border-y border-gray-200 py-16">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6">
+      <h2 class="font-serif text-2xl font-bold text-navy mb-8 text-center">Payment Methods</h2>
+
+      <div class="space-y-4">
+        <div class="flex items-start gap-4 bg-surface border border-gray-200 rounded-lg p-5">
+          <div class="flex-shrink-0 w-20 font-semibold text-navy text-sm">PayPal</div>
+          <div class="flex-1">
+            <a href="https://paypal.me/zelvi999" target="_blank" class="text-accent hover:underline font-medium">paypal.me/zelvi999</a>
+            <p class="text-xs text-gray-500 mt-1">Preferred method. Supports monthly recurring payments.</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-4 bg-surface border border-gray-200 rounded-lg p-5">
+          <div class="flex-shrink-0 w-20 font-semibold text-navy text-sm">IBAN</div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-gray-700 text-sm font-mono">AL-C0100002334708</span>
+              <button onclick="navigator.clipboard.writeText('AL-C0100002334708');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)" class="text-xs text-accent hover:text-navy transition-colors px-2 py-0.5 rounded border border-gray-200 hover:border-accent flex-shrink-0">Copy</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Bank transfer for EU/international sponsors.</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-4 bg-surface border border-gray-200 rounded-lg p-5">
+          <div class="flex-shrink-0 w-20 font-semibold text-navy text-sm">Crypto</div>
+          <div class="flex-1">
+            <div class="text-sm text-gray-700 font-mono break-all">
+              <div><span class="text-gray-500">BSC (BNB/BTC/ETH):</span></div>
+              <div class="mt-1 flex items-center gap-2">
+                <span class="text-xs">0x65ec5fcc684d1978cddaed29032aaeffc6248a84</span>
+                <button onclick="navigator.clipboard.writeText('0x65ec5fcc684d1978cddaed29032aaeffc6248a84');this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',2000)" class="text-xs text-accent hover:text-navy transition-colors px-2 py-0.5 rounded border border-gray-200 hover:border-accent flex-shrink-0">Copy</button>
+              </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Binance Smart Chain (BSC) network only.</p>
+          </div>
+        </div>
+
+        <div class="flex items-start gap-4 bg-surface border border-gray-200 rounded-lg p-5">
+          <div class="flex-shrink-0 w-20 font-semibold text-navy text-sm">Email</div>
+          <div class="flex-1">
+            <a href="mailto:elvizekaj@zedigital.tech" class="text-accent hover:underline font-medium">elvizekaj@zedigital.tech</a>
+            <p class="text-xs text-gray-500 mt-1">For custom arrangements, invoicing, or institutional purchase orders.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ACADEMIC LICENSING -->
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-2xl font-bold text-navy mb-4 text-center">Academic Licensing</h2>
+    <p class="text-gray-500 text-center mb-8">Human Cognition AI is MIT licensed and free for academic use. No special license required for research papers, coursework, or classroom use.</p>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-8 shadow-sm">
+      <h3 class="font-serif text-lg font-bold text-navy mb-4">Cite This Work</h3>
+      <pre class="bg-slate-50 border border-gray-200 rounded p-4 text-xs font-mono text-gray-700 overflow-x-auto whitespace-pre-wrap">@software{agielo2025,
+  title     = {Human Cognition AI (AGiELO):
+               A Neuroscience-Based Cognitive Architecture},
+  author    = {Zekaj, Elvi},
+  year      = {2025},
+  url       = {https://github.com/ezekaj/agielo},
+  license   = {MIT},
+  note      = {17 cognitive modules implementing
+               brain-realistic cognition}
+}</pre>
+      <button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent);this.textContent='Copied!';setTimeout(()=>this.textContent='Copy BibTeX',2000)" class="mt-4 px-4 py-2 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Copy BibTeX</button>
+    </div>
+  </section>
+
+
+  <!-- FAQ -->
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-16">
+    <h2 class="font-serif text-2xl font-bold text-navy mb-8 text-center">Sponsorship FAQ</h2>
+    <div class="space-y-3">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+        <button class="faq-question w-full flex items-center justify-between p-4 text-left">
+          <span class="text-sm font-semibold text-navy">Is the software free to use without sponsoring?</span>
+          <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="faq-answer px-4 pb-4">
+          <p class="text-sm text-gray-600 leading-relaxed">Yes. Human Cognition AI is fully open source under the MIT license. Sponsorship is voluntary and supports ongoing development, but the software is free for everyone.</p>
+        </div>
+      </div>
+      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+        <button class="faq-question w-full flex items-center justify-between p-4 text-left">
+          <span class="text-sm font-semibold text-navy">Can I cancel my sponsorship at any time?</span>
+          <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="faq-answer px-4 pb-4">
+          <p class="text-sm text-gray-600 leading-relaxed">Yes. All sponsorship tiers are month-to-month with no lock-in period. Cancel at any time through PayPal or by contacting us.</p>
+        </div>
+      </div>
+      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+        <button class="faq-question w-full flex items-center justify-between p-4 text-left">
+          <span class="text-sm font-semibold text-navy">Do you offer invoicing for institutions?</span>
+          <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="faq-answer px-4 pb-4">
+          <p class="text-sm text-gray-600 leading-relaxed">Yes. Contact elvizekaj@zedigital.tech for institutional invoicing, purchase orders, and custom payment arrangements.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- FOOTER -->
+  <footer class="border-t border-gray-200 bg-white">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      <div class="grid sm:grid-cols-3 gap-8 mb-8">
+        <div>
+          <div class="font-serif text-lg font-bold text-navy mb-3">Human Cognition AI</div>
+          <p class="text-sm text-gray-500 leading-relaxed">A neuroscience-grounded cognitive architecture by ZeDigital.</p>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-navy mb-3">Pages</div>
+          <div class="space-y-2 text-sm">
+            <a href="index.html" class="block text-gray-500 hover:text-navy transition-colors">Home</a>
+            <a href="features.html" class="block text-gray-500 hover:text-navy transition-colors">Features</a>
+            <a href="demo.html" class="block text-gray-500 hover:text-navy transition-colors">Demo</a>
+          </div>
+        </div>
+        <div>
+          <div class="text-sm font-semibold text-navy mb-3">Legal</div>
+          <div class="space-y-2 text-sm">
+            <a href="terms.html" class="block text-gray-500 hover:text-navy transition-colors">Terms of Service</a>
+            <a href="privacy.html" class="block text-gray-500 hover:text-navy transition-colors">Privacy Policy</a>
+            <a href="mailto:elvizekaj@zedigital.tech" class="block text-gray-500 hover:text-navy transition-colors">Contact</a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+        <div>MIT License. Built by ZeDigital.</div>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="hover:text-navy transition-colors">GitHub</a>
+          <span class="text-gray-300">|</span>
+          <a href="https://zedigital.tech" target="_blank" class="hover:text-navy transition-colors">Portfolio</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
