@@ -8,9 +8,14 @@ architecture, tracking module activations and returning structured results.
 import sys
 import os
 import time
+import logging
 import numpy as np
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
+
+logger = logging.getLogger("simulator")
+
+MEMORY_CAPACITY_LIMIT = 100
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -223,6 +228,7 @@ class CognitiveSimulator:
 
     def _ensure_agent(self):
         if self._initialized:
+            self._enforce_memory_limit()
             return
         if AGENT_AVAILABLE:
             try:
@@ -231,11 +237,34 @@ class CognitiveSimulator:
                 self._agent._ensure_modules()
                 self._initialized = True
             except Exception as e:
-                print(f"[Simulator] Agent init failed: {e}")
+                logger.error("Agent init failed: %s", e)
                 self._agent = None
                 self._initialized = True
         else:
             self._initialized = True
+
+    def _enforce_memory_limit(self):
+        if self._agent is None:
+            return
+        if not hasattr(self._agent, '_modules') or 'memory' not in self._agent._modules:
+            return
+        memory = self._agent._modules['memory']
+        for store_name in ('episodic', 'semantic', 'working'):
+            store = getattr(memory, store_name, None)
+            if store is None:
+                continue
+            entries = getattr(store, 'memories', None) or getattr(store, 'items', None) or getattr(store, 'buffer', None)
+            if entries is not None and hasattr(entries, '__len__') and len(entries) > MEMORY_CAPACITY_LIMIT:
+                logger.warning(
+                    "Memory store '%s' exceeded limit (%d > %d), clearing oldest entries",
+                    store_name, len(entries), MEMORY_CAPACITY_LIMIT
+                )
+                if isinstance(entries, list):
+                    del entries[:len(entries) - MEMORY_CAPACITY_LIMIT]
+                elif isinstance(entries, dict):
+                    keys_to_remove = list(entries.keys())[:len(entries) - MEMORY_CAPACITY_LIMIT]
+                    for k in keys_to_remove:
+                        del entries[k]
 
     def get_modules(self) -> List[Dict[str, Any]]:
         return [
@@ -278,6 +307,8 @@ class CognitiveSimulator:
 
         scenario = SCENARIOS[scenario_key]
         dim = parameters.get("dim", 64)
+        if not isinstance(dim, int) or dim < 1 or dim > 512:
+            return {"error": "dim must be an integer between 1 and 512"}
         steps = []
         module_activations = {}
         start_time = time.time()
@@ -286,7 +317,7 @@ class CognitiveSimulator:
             try:
                 return self._run_real_simulation(scenario_key, scenario, dim, parameters)
             except Exception as e:
-                print(f"[Simulator] Real simulation failed, using fallback: {e}")
+                logger.warning("Real simulation failed, using fallback: %s", e)
 
         return self._run_fallback_simulation(scenario_key, scenario, dim, parameters)
 
@@ -556,7 +587,7 @@ class CognitiveSimulator:
 
                 return {"text": text, "lenses": lenses, "analysis": results, "engine": "real"}
             except Exception as e:
-                print(f"[Simulator] Analysis failed, using fallback: {e}")
+                logger.warning("Analysis failed, using fallback: %s", e)
 
         word_count = len(text.split())
         results = {}
@@ -640,7 +671,7 @@ class CognitiveSimulator:
                     "engine": "real",
                 }
             except Exception as e:
-                print(f"[Simulator] Chat failed, using fallback: {e}")
+                logger.warning("Chat failed, using fallback: %s", e)
 
         word_count = len(message.split())
         system = "system2" if word_count > 8 or "?" in message else "system1"
