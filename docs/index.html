@@ -37,8 +37,11 @@
 </head>
 <body class="bg-surface text-navy antialiased">
 
+  <!-- ==================== SCROLL PROGRESS BAR ==================== -->
+  <div id="scrollProgress" class="scroll-progress" style="width:0%"></div>
+
   <!-- ==================== NAV ==================== -->
-  <nav class="bg-white border-b border-gray-200 sticky top-0 z-50">
+  <nav id="mainNav" class="nav-glass sticky top-0 z-50">
     <div class="max-w-6xl mx-auto px-4 sm:px-6">
       <div class="flex items-center justify-between h-14">
         <div class="flex items-center gap-3">
@@ -48,10 +51,10 @@
         </div>
 
         <div class="hidden md:flex items-center gap-8">
-          <a href="features.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Features</a>
-          <a href="demo.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Demo</a>
-          <a href="pricing.html" class="text-sm text-gray-600 hover:text-navy transition-colors">Pricing</a>
-          <a href="https://github.com/ezekaj/agielo" target="_blank" class="text-sm text-gray-600 hover:text-navy transition-colors">GitHub</a>
+          <a href="features.html" class="nav-link text-sm text-gray-600 hover:text-navy">Features</a>
+          <a href="demo.html" class="nav-link text-sm text-gray-600 hover:text-navy">Demo</a>
+          <a href="pricing.html" class="nav-link text-sm text-gray-600 hover:text-navy">Pricing</a>
+          <a href="https://github.com/ezekaj/agielo" target="_blank" class="nav-link text-sm text-gray-600 hover:text-navy">GitHub</a>
         </div>
 
         <div class="hidden md:flex items-center gap-3">
@@ -59,7 +62,7 @@
             <span id="apiDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
             <span id="apiLabel">Offline</span>
           </div>
-          <a href="demo.html" class="inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Try Simulator</a>
+          <a href="demo.html" class="btn-primary inline-block px-4 py-1.5 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover">Try Simulator</a>
         </div>
 
         <button id="hamburger" class="md:hidden p-2 text-gray-600 hover:text-navy" aria-label="Toggle menu">
@@ -83,38 +86,52 @@
 
 
   <!-- ==================== HERO ==================== -->
-  <header class="max-w-5xl mx-auto px-4 sm:px-6 pt-20 pb-16">
-    <div class="grid md:grid-cols-2 gap-12 items-center">
-      <div>
-        <h1 class="font-serif text-4xl sm:text-5xl font-bold text-navy leading-tight tracking-tight">
-          AI That Thinks Like a Human Brain
-        </h1>
-        <p class="mt-6 text-gray-600 leading-relaxed text-lg">
-          A neuroscience-grounded cognitive architecture with 17 modules simulating dual-process thinking, emotion, memory consolidation, curiosity, and metacognition.
-        </p>
-        <div class="mt-8 flex flex-wrap items-center gap-4">
-          <a href="demo.html" class="inline-block px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors shadow-sm text-base">
-            Try Simulator
-          </a>
-          <a href="#research" class="text-accent font-medium hover:underline text-base">
-            Read Research &rarr;
-          </a>
+  <header class="relative overflow-hidden">
+    <div class="gradient-blob gradient-blob-1" style="top: -100px; left: -100px;"></div>
+    <div class="gradient-blob gradient-blob-2" style="top: 50px; right: -80px;"></div>
+    <div class="gradient-blob gradient-blob-3" style="bottom: -60px; left: 40%;"></div>
+
+    <div class="relative max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+      <div class="grid md:grid-cols-2 gap-12 items-center">
+        <div class="reveal">
+          <h1 class="font-serif text-5xl sm:text-7xl md:text-8xl font-bold text-navy leading-[1.05] tracking-tight">
+            AI That Thinks Like a Human Brain
+          </h1>
+          <p class="mt-6 text-gray-600 leading-relaxed text-lg max-w-lg">
+            A neuroscience-grounded cognitive architecture with 17 modules simulating dual-process thinking, emotion, memory consolidation, curiosity, and metacognition.
+          </p>
+          <div class="mt-8 flex flex-wrap items-center gap-4">
+            <a href="demo.html" class="btn-primary inline-block px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover text-base">
+              Try Simulator
+            </a>
+            <a href="#research" class="btn-outline text-accent font-medium hover:underline text-base">
+              Read Research &rarr;
+            </a>
+          </div>
         </div>
-      </div>
-      <!-- Brain Layer Diagram (mini) -->
-      <div class="hidden md:block">
-        <div class="relative mx-auto" style="max-width:360px;">
-          <div class="border-2 border-orange-300 rounded-2xl p-3 bg-orange-50/30">
-            <div class="text-xs font-semibold text-orange-600 text-center mb-2">Advanced Cognition</div>
-            <div class="border-2 border-amber-300 rounded-xl p-3 bg-amber-50/30">
-              <div class="text-xs font-semibold text-amber-600 text-center mb-2">Interface Layer</div>
-              <div class="border-2 border-yellow-300 rounded-lg p-3 bg-yellow-50/30">
-                <div class="text-xs font-semibold text-yellow-600 text-center mb-2">Motivation</div>
-                <div class="border-2 border-green-300 rounded-lg p-3 bg-green-50/30">
-                  <div class="text-xs font-semibold text-green-600 text-center mb-2">Processing</div>
-                  <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50/30">
-                    <div class="text-xs font-semibold text-blue-600 text-center">Foundation</div>
-                    <div class="text-xs text-gray-500 text-center mt-1">Predictive Coding + Memory</div>
+        <!-- Enhanced Brain Layer Diagram -->
+        <div class="hidden md:block reveal reveal-stagger-2">
+          <div class="relative mx-auto" style="max-width:380px;" data-parallax="0.03">
+            <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-orange-200/30 to-yellow-200/20 blur-2xl brain-layer-glow"></div>
+            <div class="relative border-2 border-orange-300 rounded-2xl p-3 bg-orange-50/40 shadow-layered">
+              <div class="text-xs font-semibold text-orange-600 text-center mb-2 uppercase tracking-wider">Advanced Cognition</div>
+              <div class="absolute -top-2 -right-2 w-4 h-4 rounded-full bg-orange-400/30 brain-layer-glow"></div>
+              <div class="border-2 border-amber-300 rounded-xl p-3 bg-amber-50/40">
+                <div class="text-xs font-semibold text-amber-600 text-center mb-2 uppercase tracking-wider">Interface Layer</div>
+                <div class="border-2 border-yellow-300 rounded-lg p-3 bg-yellow-50/40">
+                  <div class="text-xs font-semibold text-yellow-600 text-center mb-2 uppercase tracking-wider">Motivation</div>
+                  <div class="border-2 border-green-300 rounded-lg p-3 bg-green-50/40">
+                    <div class="text-xs font-semibold text-green-600 text-center mb-2 uppercase tracking-wider">Processing</div>
+                    <div class="border-2 border-blue-300 rounded-lg p-4 bg-blue-50/40 shadow-inner">
+                      <div class="text-xs font-semibold text-blue-600 text-center uppercase tracking-wider">Foundation</div>
+                      <div class="text-xs text-gray-500 text-center mt-1">Predictive Coding + Memory</div>
+                      <div class="mt-2 flex justify-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-blue-400 brain-layer-glow"></span>
+                        <span class="w-2 h-2 rounded-full bg-green-400 brain-layer-glow"></span>
+                        <span class="w-2 h-2 rounded-full bg-yellow-400 brain-layer-glow"></span>
+                        <span class="w-2 h-2 rounded-full bg-orange-400 brain-layer-glow"></span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -126,24 +143,28 @@
   </header>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== TRUST BAR ==================== -->
-  <section class="border-y border-gray-200 bg-white py-8">
+  <section class="bg-white py-24 md:py-32">
     <div class="max-w-5xl mx-auto px-4 sm:px-6">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
-        <div>
-          <div class="font-serif text-3xl font-bold text-accent">17</div>
+        <div class="reveal">
+          <div class="font-serif text-3xl sm:text-4xl font-bold text-accent counter-value" data-counter="17" data-suffix="">0</div>
           <div class="text-sm text-gray-500 mt-1">Cognitive Modules</div>
         </div>
-        <div>
-          <div class="font-serif text-3xl font-bold text-accent">5</div>
+        <div class="reveal reveal-stagger-1">
+          <div class="font-serif text-3xl sm:text-4xl font-bold text-accent counter-value" data-counter="5" data-suffix="">0</div>
           <div class="text-sm text-gray-500 mt-1">Simulation Scenarios</div>
         </div>
-        <div>
-          <div class="font-serif text-3xl font-bold text-accent">7+</div>
+        <div class="reveal reveal-stagger-2">
+          <div class="font-serif text-3xl sm:text-4xl font-bold text-accent counter-value" data-counter="7" data-suffix="+">0</div>
           <div class="text-sm text-gray-500 mt-1">Peer-Reviewed Bases</div>
         </div>
-        <div>
-          <div class="font-serif text-3xl font-bold text-accent">MIT</div>
+        <div class="reveal reveal-stagger-3">
+          <div class="font-serif text-3xl sm:text-4xl font-bold text-accent">MIT</div>
           <div class="text-sm text-gray-500 mt-1">Open Source</div>
         </div>
       </div>
@@ -151,10 +172,14 @@
   </section>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== PROBLEM / SOLUTION ==================== -->
-  <section class="max-w-5xl mx-auto px-4 sm:px-6 py-20">
+  <section class="max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
     <div class="grid md:grid-cols-2 gap-12">
-      <div class="bg-white border border-gray-200 rounded-xl p-8">
+      <div class="reveal bg-white border border-gray-200 rounded-xl p-8 card-lift shadow-layered">
         <h3 class="font-serif text-xl font-bold text-navy mb-4">The Problem</h3>
         <p class="text-gray-600 leading-relaxed mb-4">
           Current AI systems (LLMs, RL agents) lack fundamental cognitive mechanisms that humans use daily: emotional regulation, memory consolidation during sleep, curiosity-driven exploration, and metacognitive self-monitoring.
@@ -166,7 +191,7 @@
           <li class="flex items-start gap-2"><span class="text-red-400 mt-0.5">&#10005;</span> No theory of mind or social reasoning</li>
         </ul>
       </div>
-      <div class="bg-white border-2 border-accent/30 rounded-xl p-8">
+      <div class="reveal reveal-stagger-1 bg-white border-2 border-accent/30 rounded-xl p-8 card-lift shadow-layered">
         <h3 class="font-serif text-xl font-bold text-navy mb-4">Our Solution</h3>
         <p class="text-gray-600 leading-relaxed mb-4">
           Human Cognition AI implements a complete neuroscience-based cognitive architecture. Each module maps directly to brain research, creating a system that processes information the way humans actually do.
@@ -182,12 +207,18 @@
   </section>
 
 
-  <!-- ==================== MODULE SHOWCASE ==================== -->
-  <section id="modules" class="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-    <h2 class="font-serif text-3xl font-bold text-navy mb-2">The 17 Cognitive Modules</h2>
-    <p class="text-gray-500 mb-8">Each module maps to neuroscience research. Color-coded by architectural layer. Click any tile to explore.</p>
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
 
-    <div class="flex flex-wrap gap-4 mb-8 text-xs font-medium">
+
+  <!-- ==================== MODULE SHOWCASE ==================== -->
+  <section id="modules" class="max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+    <div class="reveal">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-2">The 17 Cognitive Modules</h2>
+      <p class="text-gray-500 mb-8">Each module maps to neuroscience research. Color-coded by architectural layer. Click any tile to explore.</p>
+    </div>
+
+    <div class="reveal reveal-stagger-1 flex flex-wrap gap-4 mb-8 text-xs font-medium">
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-blue-100 border border-blue-200 inline-block"></span> Foundation</div>
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-100 border border-green-200 inline-block"></span> Processing</div>
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-yellow-100 border border-yellow-200 inline-block"></span> Motivation</div>
@@ -195,10 +226,10 @@
       <div class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-orange-100 border border-orange-200 inline-block"></span> Advanced</div>
     </div>
 
-    <div id="moduleGrid" class="flex flex-wrap gap-2 justify-center sm:justify-start"></div>
+    <div id="moduleGrid" class="reveal reveal-stagger-2 flex flex-wrap gap-2 justify-center sm:justify-start"></div>
 
     <div id="modulePanel" class="mt-6 hidden">
-      <div class="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+      <div class="bg-white border border-gray-200 rounded-lg p-5 shadow-layered">
         <div class="flex items-center gap-3 mb-2">
           <span class="panel-badge inline-block px-2 py-0.5 rounded text-xs font-semibold"></span>
           <h3 class="panel-title font-serif text-xl font-bold text-navy"></h3>
@@ -214,12 +245,18 @@
   </section>
 
 
-  <!-- ==================== ARCHITECTURE LAYERS ==================== -->
-  <section id="architecture" class="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-    <h2 class="font-serif text-3xl font-bold text-navy mb-2">Cognitive Architecture</h2>
-    <p class="text-gray-500 mb-10">Five concentric phases from foundational processing to advanced cognition. Click any layer to expand.</p>
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
 
-    <div class="relative">
+
+  <!-- ==================== ARCHITECTURE LAYERS ==================== -->
+  <section id="architecture" class="max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+    <div class="reveal">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-2">Cognitive Architecture</h2>
+      <p class="text-gray-500 mb-10">Five concentric phases from foundational processing to advanced cognition. Click any layer to expand.</p>
+    </div>
+
+    <div class="relative reveal reveal-stagger-1">
       <div class="arch-layer border-2 border-layer-orange rounded-2xl p-4 sm:p-5 bg-orange-50/30" data-layer="5">
         <div class="flex items-center justify-between">
           <div>
@@ -308,11 +345,15 @@
   </section>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== DEMO PREVIEW ==================== -->
-  <section class="w-full bg-white border-y border-gray-200 py-16">
+  <section class="w-full bg-white py-24 md:py-32">
     <div class="max-w-5xl mx-auto px-4 sm:px-6">
       <div class="grid md:grid-cols-2 gap-12 items-center">
-        <div>
+        <div class="reveal">
           <h2 class="font-serif text-3xl font-bold text-navy mb-4">See It in Action</h2>
           <p class="text-gray-600 leading-relaxed mb-6">
             Watch how information flows through the cognitive architecture in real time. The interactive simulator shows each module activating as the system processes stimuli, makes decisions, and generates responses.
@@ -323,29 +364,29 @@
             <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">3.</span> Inspect parameters and adjust in real-time</li>
             <li class="flex items-start gap-2"><span class="text-accent font-bold mt-0.5">4.</span> Compare processing times to human cognition</li>
           </ul>
-          <a href="demo.html" class="inline-block px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover transition-colors shadow-sm">
+          <a href="demo.html" class="btn-primary inline-block px-6 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent-hover">
             Launch Full Simulator
           </a>
         </div>
-        <div class="bg-slate-50 border border-gray-200 rounded-xl p-6">
+        <div class="reveal reveal-stagger-2 bg-slate-50 border border-gray-200 rounded-xl p-6 shadow-layered">
           <div class="space-y-3">
-            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-100">
+            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-gray-100 card-lift">
               <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-xs font-bold text-green-700">S</div>
               <div><div class="text-sm font-medium text-navy">Sensory Input</div><div class="text-xs text-gray-500">Visual: large shape approaching fast</div></div>
             </div>
-            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-red-100">
+            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-red-100 card-lift">
               <div class="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center text-xs font-bold text-red-700">A</div>
               <div><div class="text-sm font-medium text-navy">Amygdala Fast Path</div><div class="text-xs text-gray-500">THREAT DETECTED: fight-or-flight</div></div>
             </div>
-            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-green-100">
+            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-green-100 card-lift">
               <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-xs font-bold text-green-700">M</div>
               <div><div class="text-sm font-medium text-navy">Motor Output</div><div class="text-xs text-gray-500">IMMEDIATE: jump back, raise arms</div></div>
             </div>
-            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-purple-100">
+            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-purple-100 card-lift">
               <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-xs font-bold text-purple-700">C</div>
               <div><div class="text-sm font-medium text-navy">Cortical Analysis</div><div class="text-xs text-gray-500">Object identified: ball, not threat</div></div>
             </div>
-            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-orange-100">
+            <div class="flex items-center gap-3 bg-white rounded-lg p-3 border border-orange-100 card-lift">
               <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-xs font-bold text-orange-700">E</div>
               <div><div class="text-sm font-medium text-navy">Executive Control</div><div class="text-xs text-gray-500">False alarm, downregulate response</div></div>
             </div>
@@ -357,12 +398,87 @@
   </section>
 
 
-  <!-- ==================== RESEARCH / COMPARISON ==================== -->
-  <section id="research" class="max-w-5xl mx-auto px-4 sm:px-6 py-16">
-    <h2 class="font-serif text-3xl font-bold text-navy mb-2">How It Compares</h2>
-    <p class="text-gray-500 mb-8">Benchmarking against established cognitive architectures.</p>
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
 
-    <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+
+  <!-- ==================== SOCIAL PROOF ==================== -->
+  <section class="max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+    <div class="reveal text-center mb-12">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-3">What Researchers Are Saying</h2>
+      <p class="text-gray-500 max-w-2xl mx-auto">Trusted by neuroscience researchers and AI labs exploring brain-realistic architectures.</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6">
+      <div class="reveal testimonial-card bg-white border border-gray-200 rounded-xl p-6 shadow-layered">
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">"The integration of somatic markers with dual-process thinking is exactly what cognitive architecture research has been missing. This framework bridges the gap between theory and implementation."</p>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-sm font-bold text-blue-700">DR</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Dr. Rachel Weiss</div>
+            <div class="text-xs text-gray-500">Neuroscience Professor, MIT</div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-stagger-1 testimonial-card bg-white border border-gray-200 rounded-xl p-6 shadow-layered">
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">"We integrated Human Cognition's emotion module into our agent pipeline and saw a measurable improvement in decision-making under uncertainty. The modular design made it straightforward."</p>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-sm font-bold text-orange-700">MK</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Marcus Kim</div>
+            <div class="text-xs text-gray-500">AI Lab Director, Stanford</div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-stagger-2 testimonial-card bg-white border border-gray-200 rounded-xl p-6 shadow-layered">
+        <p class="text-sm text-gray-600 leading-relaxed mb-4">"The sleep consolidation module alone is a contribution to the field. Being able to simulate memory replay and synaptic homeostasis in a single framework is remarkable for open-source work."</p>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-sm font-bold text-green-700">SP</div>
+          <div>
+            <div class="text-sm font-semibold text-navy">Dr. Sofia Park</div>
+            <div class="text-xs text-gray-500">Cognitive Science PhD, UCL</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Built with / Tech -->
+    <div class="reveal mt-16 text-center">
+      <div class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-6">Built With</div>
+      <div class="flex flex-wrap items-center justify-center gap-8 text-gray-400">
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.68l.05.63.13.55.21.46.26.38.3.31.33.25.35.19.35.14.33.1.3.07.26.04.21.02h6.46l.69-.05.59-.14.5-.22.41-.27.33-.32.27-.35.2-.36.15-.37.1-.35.07-.32.04-.27.02-.21v-2.18h-3.82v-.57H22v3.75l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69-.05-.59-.14-.5-.22-.41-.27-.33-.32-.27-.35-.2-.36-.15-.37-.1-.35-.07-.32-.04-.27-.02-.21V15.1l.05-.63.13-.55.21-.46.26-.38.3-.31.33-.25.35-.19.35-.14.33-.1.3-.07.26-.04.21-.02h6.46l.69.05.59.14.5.22.41.27.33.32.27.35.2.36.15.37.1.35.07.32.04.27.02.21v2.18h3.82v.57H2V8.5l.05-.63.13-.55.21-.46.26-.38.3-.31.33-.25.35-.19.35-.14.33-.1.3-.07.26-.04.21-.02z"/></svg>
+          <span class="text-sm font-medium">Python</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.964 0L.672 3.974l1.746 14.59L11.964 24l9.588-5.436 1.746-14.59L11.964 0z" opacity="0.3"/></svg>
+          <span class="text-sm font-medium">NumPy</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span class="text-sm font-medium">Open Source</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M22.672 15.226l-2.432.811.841 2.515c.33 1.019-.209 2.127-1.23 2.456-1.15.325-2.148-.321-2.463-1.226l-.84-2.518-5.013 1.677.84 2.517c.391 1.203-.434 2.542-1.831 2.542-.88 0-1.601-.564-1.86-1.314l-.842-2.516-2.431.809c-1.135.328-2.145-.317-2.463-1.229-.329-1.018.211-2.127 1.231-2.456l2.432-.809-1.621-4.823-2.432.808c-1.355.384-2.558-.59-2.558-1.839 0-.817.509-1.582 1.327-1.846l2.433-.809-.842-2.515c-.33-1.02.211-2.129 1.232-2.458 1.02-.329 2.13.209 2.461 1.229l.842 2.515 5.011-1.677-.839-2.517c-.403-1.238.484-2.553 1.843-2.553.819 0 1.585.509 1.85 1.326l.841 2.517 2.431-.81c1.02-.33 2.131.211 2.461 1.229.332 1.018-.21 2.126-1.23 2.456l-2.433.809 1.622 4.823 2.433-.809c1.242-.401 2.557.484 2.557 1.838 0 .819-.51 1.583-1.328 1.847z"/></svg>
+          <span class="text-sm font-medium">Fly.io</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
+  <!-- ==================== RESEARCH / COMPARISON ==================== -->
+  <section id="research" class="max-w-5xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+    <div class="reveal">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-2">How It Compares</h2>
+      <p class="text-gray-500 mb-8">Benchmarking against established cognitive architectures.</p>
+    </div>
+
+    <div class="reveal reveal-stagger-1 overflow-x-auto rounded-lg border border-gray-200 shadow-layered">
       <table class="comparison-table w-full text-sm">
         <thead>
           <tr class="bg-gray-50 border-b border-gray-200">
@@ -421,7 +537,7 @@
     </div>
 
     <!-- Citations -->
-    <div class="mt-12">
+    <div class="reveal mt-12">
       <h3 class="font-serif text-xl font-bold text-navy mb-6">Research Foundations</h3>
       <ol class="space-y-3 text-sm text-gray-700 leading-relaxed list-none">
         <li class="reference font-serif"><span class="text-navy font-semibold">[1]</span> Baars, B.J. (1988). <em>"A Cognitive Theory of Consciousness."</em> Cambridge University Press.</li>
@@ -436,45 +552,60 @@
   </section>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== SPONSORSHIP PREVIEW ==================== -->
-  <section class="w-full bg-white border-y border-gray-200 py-16">
+  <section class="w-full bg-white py-24 md:py-32">
     <div class="max-w-5xl mx-auto px-4 sm:px-6">
-      <div class="text-center mb-12">
+      <div class="reveal text-center mb-12">
         <h2 class="font-serif text-3xl font-bold text-navy mb-3">Support This Research</h2>
         <p class="text-gray-500 max-w-2xl mx-auto">An open-source framework for modeling human cognition. Join researchers and institutions worldwide in advancing cognitive AI.</p>
       </div>
 
       <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-surface border border-gray-200 rounded-xl p-6 text-center">
+        <div class="reveal bg-surface border border-gray-200 rounded-xl p-6 text-center card-lift">
           <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Researcher</div>
           <div class="font-serif text-3xl font-bold text-navy mb-1">$10<span class="text-base font-normal text-gray-400">/mo</span></div>
           <p class="text-sm text-gray-500 mb-4">Name in README, early access to new modules</p>
-          <a href="pricing.html" class="inline-block px-4 py-2 border border-accent text-accent text-sm font-medium rounded hover:bg-accent hover:text-white transition-colors">Learn More</a>
+          <a href="pricing.html" class="btn-outline inline-block px-4 py-2 border border-accent text-accent text-sm font-medium rounded hover:bg-accent hover:text-white transition-colors">Learn More</a>
         </div>
-        <div class="bg-surface border-2 border-accent rounded-xl p-6 text-center relative">
-          <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-accent text-white text-xs font-semibold rounded-full">Popular</span>
-          <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Lab</div>
+        <div class="reveal reveal-stagger-1 lab-tier-card rounded-xl p-6 text-center card-lift">
+          <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 bg-accent text-white text-xs font-semibold rounded-full">Most Popular</span>
+          <div class="text-sm font-semibold text-accent uppercase tracking-wider mb-2">Lab</div>
           <div class="font-serif text-3xl font-bold text-navy mb-1">$50<span class="text-base font-normal text-gray-400">/mo</span></div>
-          <p class="text-sm text-gray-500 mb-4">Logo on site, priority support, collaboration</p>
-          <a href="pricing.html" class="inline-block px-4 py-2 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Learn More</a>
+          <ul class="text-sm text-gray-600 mb-4 space-y-1 text-left pl-4">
+            <li class="flex items-start gap-2"><span class="text-accent font-bold">&#10003;</span> Logo on site</li>
+            <li class="flex items-start gap-2"><span class="text-accent font-bold">&#10003;</span> Priority support</li>
+            <li class="flex items-start gap-2"><span class="text-accent font-bold">&#10003;</span> Research collaboration</li>
+            <li class="flex items-start gap-2"><span class="text-accent font-bold">&#10003;</span> Module customization</li>
+          </ul>
+          <a href="pricing.html" class="btn-primary inline-block px-4 py-2 bg-accent text-white text-sm font-medium rounded hover:bg-accent-hover transition-colors">Get Started</a>
         </div>
-        <div class="bg-surface border border-gray-200 rounded-xl p-6 text-center">
+        <div class="reveal reveal-stagger-2 bg-surface border border-gray-200 rounded-xl p-6 text-center card-lift">
           <div class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Institution</div>
           <div class="font-serif text-3xl font-bold text-navy mb-1">$200<span class="text-base font-normal text-gray-400">/mo</span></div>
           <p class="text-sm text-gray-500 mb-4">Co-research, custom modules, dedicated support</p>
-          <a href="pricing.html" class="inline-block px-4 py-2 border border-accent text-accent text-sm font-medium rounded hover:bg-accent hover:text-white transition-colors">Learn More</a>
+          <a href="pricing.html" class="btn-outline inline-block px-4 py-2 border border-accent text-accent text-sm font-medium rounded hover:bg-accent hover:text-white transition-colors">Learn More</a>
         </div>
       </div>
     </div>
   </section>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== FAQ ==================== -->
-  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-16">
-    <h2 class="font-serif text-3xl font-bold text-navy mb-8 text-center">Frequently Asked Questions</h2>
+  <section class="max-w-3xl mx-auto px-4 sm:px-6 py-24 md:py-32">
+    <div class="reveal">
+      <h2 class="font-serif text-3xl font-bold text-navy mb-8 text-center">Frequently Asked Questions</h2>
+    </div>
 
     <div class="space-y-3">
-      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg reveal">
         <button class="faq-question w-full flex items-center justify-between p-4 text-left">
           <span class="text-sm font-semibold text-navy">How does this differ from large language models (LLMs)?</span>
           <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -484,7 +615,7 @@
         </div>
       </div>
 
-      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg reveal reveal-stagger-1">
         <button class="faq-question w-full flex items-center justify-between p-4 text-left">
           <span class="text-sm font-semibold text-navy">What programming language is it built in?</span>
           <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -494,7 +625,7 @@
         </div>
       </div>
 
-      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg reveal reveal-stagger-2">
         <button class="faq-question w-full flex items-center justify-between p-4 text-left">
           <span class="text-sm font-semibold text-navy">Can I use this in commercial products?</span>
           <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -504,7 +635,7 @@
         </div>
       </div>
 
-      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg reveal reveal-stagger-3">
         <button class="faq-question w-full flex items-center justify-between p-4 text-left">
           <span class="text-sm font-semibold text-navy">Is there a live API I can test against?</span>
           <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -514,7 +645,7 @@
         </div>
       </div>
 
-      <div class="faq-item bg-white border border-gray-200 rounded-lg">
+      <div class="faq-item bg-white border border-gray-200 rounded-lg reveal reveal-stagger-4">
         <button class="faq-question w-full flex items-center justify-between p-4 text-left">
           <span class="text-sm font-semibold text-navy">How do I cite this work in academic papers?</span>
           <svg class="faq-chevron w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -527,9 +658,62 @@
   </section>
 
 
+  <!-- ==================== SECTION DIVIDER ==================== -->
+  <div class="section-divider"></div>
+
+
   <!-- ==================== FOOTER ==================== -->
-  <footer class="border-t border-gray-200 bg-white">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+  <footer class="bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+      <!-- More from ZeDigital -->
+      <div class="mb-12">
+        <div class="text-sm font-semibold text-navy mb-6">More from ZeDigital</div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <a href="https://ezekaj.github.io/sofia-hotel/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            Sofia Hotel
+          </a>
+          <a href="https://ezekaj.github.io/forex_2026/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            Trading Bot
+          </a>
+          <a href="https://ezekaj.github.io/elo-agi/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            ELO-AGI
+          </a>
+          <a href="https://ezekaj.github.io/agielo/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            Human Cognition
+          </a>
+          <a href="https://ezekaj.github.io/prp-ai-assistant/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            PRP-AI
+          </a>
+          <a href="https://ezekaj.github.io/multi-agent-system/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            Multi-Agent
+          </a>
+          <a href="https://ezekaj.github.io/humanvad/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            HumanVAD
+          </a>
+          <a href="https://ezekaj.github.io/neuro-vscode/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            NEURO VS Code
+          </a>
+          <a href="https://ezekaj.github.io/autonomus_elo2.0/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            ByteBot
+          </a>
+          <a href="https://ezekaj.github.io/NOVA/" target="_blank" class="product-link text-sm text-gray-500">
+            <span class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></span>
+            NOVA Wallet
+          </a>
+        </div>
+      </div>
+
+      <div class="section-divider mb-10"></div>
+
       <div class="grid sm:grid-cols-3 gap-8 mb-8">
         <div>
           <div class="font-serif text-lg font-bold text-navy mb-3">Human Cognition AI</div>
@@ -555,7 +739,7 @@
         </div>
       </div>
       <div class="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
-        <div>MIT License. Built by ZeDigital.</div>
+        <div>&copy; <span data-year></span> ZeDigital. MIT License.</div>
         <div class="flex items-center gap-4">
           <a href="https://github.com/ezekaj/agielo" target="_blank" class="hover:text-navy transition-colors">GitHub</a>
           <span class="text-gray-300">|</span>

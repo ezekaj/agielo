@@ -185,6 +185,131 @@ function initSmoothScroll() {
 }
 
 // =====================================================
+// SCROLL PROGRESS BAR
+// =====================================================
+function initScrollProgress() {
+  const bar = document.getElementById('scrollProgress');
+  if (!bar) return;
+  window.addEventListener('scroll', () => {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+    bar.style.width = progress + '%';
+  }, { passive: true });
+}
+
+// =====================================================
+// NAV SCROLL EFFECT
+// =====================================================
+function initNavScrollEffect() {
+  const nav = document.getElementById('mainNav');
+  if (!nav) return;
+  let lastScroll = 0;
+  window.addEventListener('scroll', () => {
+    const currentScroll = window.scrollY;
+    if (currentScroll > 20) {
+      nav.classList.add('scrolled');
+    } else {
+      nav.classList.remove('scrolled');
+    }
+    lastScroll = currentScroll;
+  }, { passive: true });
+}
+
+// =====================================================
+// SCROLL REVEAL WITH STAGGER
+// =====================================================
+function initScrollReveal() {
+  const reveals = document.querySelectorAll('.reveal');
+  if (!reveals.length) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -40px 0px'
+  });
+
+  reveals.forEach(el => observer.observe(el));
+}
+
+// =====================================================
+// ANIMATED COUNTERS
+// =====================================================
+function initCounters() {
+  const counters = document.querySelectorAll('[data-counter]');
+  if (!counters.length) return;
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        animateCounter(entry.target);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  counters.forEach(el => observer.observe(el));
+}
+
+function animateCounter(el) {
+  const target = parseInt(el.getAttribute('data-counter'));
+  const suffix = el.getAttribute('data-suffix') || '';
+  const prefix = el.getAttribute('data-prefix') || '';
+  const duration = 1800;
+  const startTime = performance.now();
+
+  function update(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(eased * target);
+    el.textContent = prefix + current + suffix;
+    if (progress < 1) {
+      requestAnimationFrame(update);
+    }
+  }
+  requestAnimationFrame(update);
+}
+
+// =====================================================
+// PARALLAX
+// =====================================================
+function initParallax() {
+  const parallaxEls = document.querySelectorAll('[data-parallax]');
+  if (!parallaxEls.length) return;
+
+  window.addEventListener('scroll', () => {
+    const scrollY = window.scrollY;
+    parallaxEls.forEach(el => {
+      const speed = parseFloat(el.getAttribute('data-parallax')) || 0.1;
+      const rect = el.getBoundingClientRect();
+      const visible = rect.top < window.innerHeight && rect.bottom > 0;
+      if (visible) {
+        const offset = (scrollY - el.offsetTop + window.innerHeight) * speed;
+        el.style.transform = `translateY(${offset}px)`;
+      }
+    });
+  }, { passive: true });
+}
+
+// =====================================================
+// DYNAMIC YEAR
+// =====================================================
+function initDynamicYear() {
+  const yearEls = document.querySelectorAll('[data-year]');
+  const currentYear = new Date().getFullYear();
+  yearEls.forEach(el => {
+    el.textContent = currentYear;
+  });
+}
+
+// =====================================================
 // API CONNECTION
 // =====================================================
 const API_BASE = 'https://zedigital-human-cognition.fly.dev';
@@ -889,6 +1014,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initFAQ();
   initSmoothScroll();
   initSimulator();
+  initScrollProgress();
+  initNavScrollEffect();
+  initScrollReveal();
+  initCounters();
+  initParallax();
+  initDynamicYear();
 
   if (document.getElementById('moduleGrid')) {
     buildModuleGrid('moduleGrid', 'modulePanel');
