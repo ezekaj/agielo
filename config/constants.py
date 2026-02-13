@@ -172,6 +172,22 @@ DEFAULT_LSTM_NUM_LAYERS = 2
 LSTM_DROPOUT_RATE = 0.1
 
 # =============================================================================
+# LLM Context Window Constants
+# =============================================================================
+
+# Maximum characters for system prompt (including cognitive context)
+MAX_SYSTEM_PROMPT_CHARS = 8000
+
+# Maximum characters for user input
+MAX_USER_INPUT_CHARS = 16000
+
+# Maximum total context characters (~50k tokens)
+MAX_CONTEXT_CHARS = 100000
+
+# Maximum response characters to keep from LLM output
+MAX_RESPONSE_CHARS = 16000
+
+# =============================================================================
 # Demo/Test Constants
 # =============================================================================
 

@@ -60,11 +60,12 @@ class CognitiveEngine:
                 mock_adapter.NeuroMemorySystem = None
                 sys.modules['integrations.neuro_memory_adapter'] = mock_adapter
 
-                from integrations.cognitive_ollama import CognitiveOllama
+                from integrations.cognitive_ollama import CognitiveLLM
 
-                self.ai = CognitiveOllama(
-                    model="cognitive-local",
-                    ollama_url=f"{LM_STUDIO_URL}/v1/chat/completions",
+                self.ai = CognitiveLLM(
+                    model=LM_STUDIO_MODEL,
+                    api_url=f"{LM_STUDIO_URL}/v1/chat/completions",
+                    backend="lmstudio",
                 )
                 logger.info("CognitiveOllama initialized")
             except Exception as e:
